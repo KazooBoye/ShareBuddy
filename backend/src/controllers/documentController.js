@@ -207,7 +207,7 @@ const getDocument = async (req, res, next) => {
               AVG(r.rating) as avg_rating,
               COUNT(r.rating_id) as rating_count
        FROM documents d
-       JOIN users u ON d.user_id = u.user_id
+       JOIN users u ON d.author_id = u.user_id
        LEFT JOIN ratings r ON d.document_id = r.document_id
        WHERE d.document_id = $1
        GROUP BY d.document_id, u.user_id`,
@@ -225,7 +225,7 @@ const getDocument = async (req, res, next) => {
 
     // Check if document is approved or user is owner
     if (document.status !== 'approved' && 
-        (!req.user || req.user.user_id !== document.user_id)) {
+        (!req.user || req.user.user_id !== document.author_id)) {
       return res.status(403).json({
         success: false,
         error: 'Không có quyền truy cập tài liệu này'
@@ -288,7 +288,7 @@ const getDocument = async (req, res, next) => {
           createdAt: document.created_at,
           updatedAt: document.updated_at,
           author: {
-            id: document.user_id,
+            id: document.author_id,
             username: document.username,
             fullName: document.full_name,
             avatarUrl: document.avatar_url,
@@ -312,9 +312,14 @@ const getDocument = async (req, res, next) => {
 // Upload document
 const uploadDocument = async (req, res, next) => {
   try {
+    console.log('Upload request received');
+    console.log('Request body:', req.body);
+    console.log('Request file:', req.file);
+    
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
       return res.status(400).json({
         success: false,
         error: 'Dữ liệu không hợp lệ',
@@ -323,6 +328,7 @@ const uploadDocument = async (req, res, next) => {
     }
 
     if (!req.file) {
+      console.log('No file in request');
       return res.status(400).json({
         success: false,
         error: 'Không có file được upload'
@@ -332,23 +338,60 @@ const uploadDocument = async (req, res, next) => {
     const {
       title,
       description,
-      category,
       subject,
-      creditCost
+      creditCost,
+      university,
+      tags
     } = req.body;
 
     const userId = req.user.user_id;
     const fileUrl = `/uploads/documents/${req.file.filename}`;
+    const fileName = req.file.originalname;
+    const fileSize = req.file.size;
+    const fileType = path.extname(req.file.originalname).toLowerCase().slice(1);
     
-    // Create document
+    console.log('Creating document with data:', {
+      userId,
+      title,
+      description,
+      subject,
+      university,
+      creditCost,
+      fileUrl,
+      fileName,
+      fileSize,
+      fileType,
+      tags
+    });
+    
+    // Create document with all required fields
     const result = await query(
-      `INSERT INTO documents (user_id, title, description, file_url, category, subject, credit_cost, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING document_id, title, description, file_url, category, subject, credit_cost, status, created_at`,
-      [userId, title, description, fileUrl, category, subject, parseInt(creditCost), 'pending']
+      `INSERT INTO documents (author_id, title, description, file_path, file_name, file_size, file_type, subject, university, credit_cost, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING document_id, title, description, file_path, file_name, file_size, file_type, subject, university, credit_cost, status, created_at`,
+      [userId, title, description, fileUrl, fileName, fileSize, fileType, subject, university || null, parseInt(creditCost) || 0, 'pending']
     );
 
     const document = result.rows[0];
+    
+    // Process and insert tags if provided
+    if (tags) {
+      const tagList = typeof tags === 'string' 
+        ? tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+        : Array.isArray(tags) ? tags : [];
+      
+      if (tagList.length > 0) {
+        console.log('Inserting tags:', tagList);
+        for (const tag of tagList) {
+          await query(
+            'INSERT INTO document_tags (document_id, tag_name) VALUES ($1, $2)',
+            [document.document_id, tag]
+          );
+        }
+      }
+    }
+    
+    console.log('Document created successfully:', document);
 
     res.status(201).json({
       success: true,
@@ -358,9 +401,12 @@ const uploadDocument = async (req, res, next) => {
           id: document.document_id,
           title: document.title,
           description: document.description,
-          fileUrl: document.file_url,
-          category: document.category,
+          fileUrl: document.file_path,
+          fileName: document.file_name,
+          fileSize: document.file_size,
+          fileType: document.file_type,
           subject: document.subject,
+          university: document.university,
           creditCost: document.credit_cost,
           status: document.status,
           createdAt: document.created_at
@@ -368,6 +414,7 @@ const uploadDocument = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('Upload error:', error);
     next(error);
   }
 };
@@ -380,7 +427,7 @@ const downloadDocument = async (req, res, next) => {
 
     // Get document info
     const docResult = await query(
-      'SELECT user_id, title, file_url, credit_cost FROM documents WHERE document_id = $1 AND status = $2',
+      'SELECT author_id, title, file_url, credit_cost FROM documents WHERE document_id = $1 AND status = $2',
       [id, 'approved']
     );
 
@@ -441,7 +488,7 @@ const downloadDocument = async (req, res, next) => {
       // Add credits to document owner
       await client.query(
         'UPDATE users SET credits = credits + $1 WHERE user_id = $2',
-        [document.credit_cost, document.user_id]
+        [document.credit_cost, document.author_id]
       );
 
       // Record download
@@ -466,7 +513,7 @@ const downloadDocument = async (req, res, next) => {
       await client.query(
         `INSERT INTO credit_transactions (user_id, amount, transaction_type, description, related_document_id)
          VALUES ($1, $2, $3, $4, $5)`,
-        [document.user_id, document.credit_cost, 'earn', `Bán tài liệu: ${document.title}`, id]
+        [document.author_id, document.credit_cost, 'earn', `Bán tài liệu: ${document.title}`, id]
       );
     });
 

@@ -385,6 +385,57 @@ const verifyEmail = async (req, res, next) => {
   }
 };
 
+const resendVerification = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email không được cung cấp'
+      });
+    }
+
+    const result = await query(
+      'SELECT user_id, username, email, email_verified FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Email không tồn tại'
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (user.email_verified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email đã được xác thực'
+      });
+    }
+
+    const verificationToken = generateVerificationToken();
+    const verificationExpires = getTokenExpiration(24);
+
+    await query(
+      `UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE user_id = $3`,
+      [verificationToken, verificationExpires, user.user_id]
+    );
+
+    await emailService.sendVerificationEmail(user.email, user.username, verificationToken);
+
+    res.json({
+      success: true,
+      message: 'Email xác thực đã được gửi lại'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Google OAuth - Initiate authentication
 const googleAuth = async (req, res, next) => {
   const passport = require('passport');

@@ -7,12 +7,12 @@ const express = require('express');
 const router = express.Router();
 const { body, param } = require('express-validator');
 const verifiedAuthorController = require('../controllers/verifiedAuthorController');
-const { authenticate, authorize } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 
 // Submit verified author request (authenticated users)
 router.post(
   '/request',
-  authenticate,
+  protect,
   [
     body('reason')
       .notEmpty().withMessage('Lý do không được để trống')
@@ -22,7 +22,7 @@ router.post(
 );
 
 // Get user's requests (authenticated users)
-router.get('/my-requests', authenticate, verifiedAuthorController.getUserRequests);
+router.get('/my-requests', protect, verifiedAuthorController.getUserRequests);
 
 // Get verified authors list (public)
 router.get('/authors', verifiedAuthorController.getVerifiedAuthors);
@@ -31,12 +31,12 @@ router.get('/authors', verifiedAuthorController.getVerifiedAuthors);
 router.get('/status/:userId?', verifiedAuthorController.checkStatus);
 
 // [ADMIN] Get pending requests
-router.get('/admin/pending', authenticate, authorize('admin'), verifiedAuthorController.getPendingRequests);
+router.get('/admin/pending', protect, authorize('admin'), verifiedAuthorController.getPendingRequests);
 
 // [ADMIN] Review request
 router.post(
   '/admin/review/:requestId',
-  authenticate,
+  protect,
   authorize('admin'),
   [
     param('requestId').isUUID().withMessage('Request ID không hợp lệ'),

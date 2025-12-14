@@ -15,6 +15,9 @@ const Navbar: React.FC = () => {
   const { theme } = useAppSelector((state) => state.ui);
   const { user, isAuthenticated, logout } = useAuth();
 
+  // Default avatar as data URL to prevent infinite requests
+  const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%236c757d"/%3E%3Ctext x="20" y="26" font-size="20" fill="white" text-anchor="middle" font-family="Arial"%3E👤%3C/text%3E%3C/svg%3E';
+
   const handleLogout = async () => {
     await logout();
     navigate('/');
@@ -67,11 +70,12 @@ const Navbar: React.FC = () => {
                 </Nav.Link>
                 <div className="d-flex align-items-center">
                   <img
-                    src={user?.avatarUrl || '/default-avatar.png'}
+                    src={user?.avatarUrl || DEFAULT_AVATAR}
                     alt="Avatar"
                     className="user-avatar me-2"
                     onError={(e) => {
-                      e.currentTarget.src = '/default-avatar.png';
+                      e.currentTarget.onerror = null; // Prevent infinite loop
+                      e.currentTarget.src = DEFAULT_AVATAR;
                     }}
                   />
                   <span className="me-2 text-light d-none d-md-inline">

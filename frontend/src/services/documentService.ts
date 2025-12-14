@@ -25,14 +25,14 @@ export const documentService = {
     }
     
     const query = queryParams.toString();
-    const url = query ? `/documents?${query}` : '/documents';
+    const url = query ? `documents?${query}` : 'documents';
     
     return apiRequest('GET', url);
   },
 
   // Get document by ID
   getDocumentById: async (id: string): Promise<ApiResponse<Document>> => {
-    return apiRequest('GET', `/documents/${id}`);
+    return apiRequest('GET', `documents/${id}`);
   },
 
   // Upload new document
@@ -41,22 +41,22 @@ export const documentService = {
     file: File,
     onProgress?: (progress: number) => void
   ): Promise<ApiResponse<Document>> => {
-    return uploadFile('/documents/upload', file, data, onProgress);
+    return uploadFile('documents/upload', file, data, onProgress);
   },
 
   // Update document
   updateDocument: async (id: string, data: Partial<DocumentUploadForm>): Promise<ApiResponse<Document>> => {
-    return apiRequest('PUT', `/documents/${id}`, data);
+    return apiRequest('PUT', `documents/${id}`, data);
   },
 
   // Delete document
   deleteDocument: async (id: string): Promise<ApiResponse> => {
-    return apiRequest('DELETE', `/documents/${id}`);
+    return apiRequest('DELETE', `documents/${id}`);
   },
 
   // Download document
   downloadDocument: async (id: string): Promise<Blob> => {
-    const response = await apiRequest('GET', `/documents/${id}/download`, null, {
+    const response = await apiRequest('GET', `documents/${id}/download`, null, {
       responseType: 'blob'
     });
     return response.data || response;
@@ -64,32 +64,32 @@ export const documentService = {
 
   // Get document preview
   previewDocument: async (id: string): Promise<ApiResponse<{ previewUrl: string }>> => {
-    return apiRequest('GET', `/documents/${id}/preview`);
+    return apiRequest('GET', `documents/${id}/preview`);
   },
 
   // Bookmark document
   bookmarkDocument: async (id: string): Promise<ApiResponse> => {
-    return apiRequest('POST', `/documents/${id}/bookmark`);
+    return apiRequest('POST', `documents/${id}/bookmark`);
   },
 
   // Remove bookmark
   removeBookmark: async (id: string): Promise<ApiResponse> => {
-    return apiRequest('DELETE', `/documents/${id}/bookmark`);
+    return apiRequest('DELETE', `documents/${id}/bookmark`);
   },
 
   // Get user's bookmarked documents
   getBookmarkedDocuments: async (): Promise<ApiResponse<PaginatedResponse<Document>>> => {
-    return apiRequest('GET', '/documents/bookmarks');
+    return apiRequest('GET', 'documents/bookmarks');
   },
 
   // Get user's uploaded documents
   getMyDocuments: async (): Promise<ApiResponse<PaginatedResponse<Document>>> => {
-    return apiRequest('GET', '/documents/my-documents');
+    return apiRequest('GET', 'documents/my-documents');
   },
 
   // Get user's downloaded documents
   getDownloadedDocuments: async (): Promise<ApiResponse<PaginatedResponse<Document>>> => {
-    return apiRequest('GET', '/documents/downloads');
+    return apiRequest('GET', 'documents/downloads');
   },
 
   // Search documents
@@ -108,13 +108,13 @@ export const documentService = {
   // Get popular documents
   getPopularDocuments: async (limit?: number): Promise<ApiResponse<Document[]>> => {
     const params = limit ? `?limit=${limit}` : '';
-    return apiRequest('GET', `/documents/popular${params}`);
+    return apiRequest('GET', `documents/popular${params}`);
   },
 
   // Get recent documents
   getRecentDocuments: async (limit?: number): Promise<ApiResponse<Document[]>> => {
     const params = limit ? `?limit=${limit}` : '';
-    return apiRequest('GET', `/documents/recent${params}`);
+    return apiRequest('GET', `documents/recent${params}`);
   },
 
   // Get documents by category
@@ -143,12 +143,12 @@ export const documentService = {
     ratingCount: number;
     averageRating: number;
   }>> => {
-    return apiRequest('GET', `/documents/${id}/stats`);
+    return apiRequest('GET', `documents/${id}/stats`);
   },
 
   // Report document
   reportDocument: async (id: string, reason: string, description?: string): Promise<ApiResponse> => {
-    return apiRequest('POST', `/documents/${id}/report`, {
+    return apiRequest('POST', `documents/${id}/report`, {
       reason,
       description
     });
@@ -156,11 +156,11 @@ export const documentService = {
 
   // Get document categories
   getCategories: async (): Promise<ApiResponse<string[]>> => {
-    return apiRequest('GET', '/documents/categories');
+    return apiRequest('GET', 'documents/categories');
   },
 
   // Get subjects by category
   getSubjectsByCategory: async (category: string): Promise<ApiResponse<string[]>> => {
-    return apiRequest('GET', `/documents/categories/${category}/subjects`);
+    return apiRequest('GET', `documents/categories/${category}/subjects`);
   }
 };

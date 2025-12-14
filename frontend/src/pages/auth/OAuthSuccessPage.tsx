@@ -25,7 +25,7 @@ const OAuthSuccessPage: React.FC = () => {
 
     if (token) {
       // Save token to localStorage
-      localStorage.setItem('token', token);
+      localStorage.setItem('sharebuddy_token', token);
       
       // Refresh user data with new token
       refreshUser().then(() => {
@@ -35,6 +35,7 @@ const OAuthSuccessPage: React.FC = () => {
         setError('Không thể tải thông tin người dùng');
         setTimeout(() => navigate('/login'), 3000);
       });
+    } else {
       setError('Token không hợp lệ');
       setTimeout(() => navigate('/login'), 3000);
     }

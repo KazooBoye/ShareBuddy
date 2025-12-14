@@ -17,7 +17,7 @@ export const commentService = {
     if (limit) params.append('limit', limit.toString());
     
     const query = params.toString();
-    const url = query ? `/comments/document/${documentId}?${query}` : `/comments/document/${documentId}`;
+    const url = query ? `comments/document/${documentId}?${query}` : `comments/document/${documentId}`;
     
     return apiRequest('GET', url);
   },
@@ -33,14 +33,14 @@ export const commentService = {
     if (limit) params.append('limit', limit.toString());
     
     const query = params.toString();
-    const url = query ? `/comments/${commentId}/replies?${query}` : `/comments/${commentId}/replies`;
+    const url = query ? `comments/${commentId}/replies?${query}` : `comments/${commentId}/replies`;
     
     return apiRequest('GET', url);
   },
 
   // Add comment to document
   addComment: async (documentId: string, content: string): Promise<ApiResponse<Comment>> => {
-    return apiRequest('POST', '/comments', {
+    return apiRequest('POST', 'comments', {
       documentId,
       content
     });
@@ -48,26 +48,26 @@ export const commentService = {
 
   // Reply to a comment
   replyToComment: async (parentCommentId: string, content: string): Promise<ApiResponse<Comment>> => {
-    return apiRequest('POST', `/comments/${parentCommentId}/reply`, {
+    return apiRequest('POST', `comments/${parentCommentId}/reply`, {
       content
     });
   },
 
   // Update comment
   updateComment: async (commentId: string, content: string): Promise<ApiResponse<Comment>> => {
-    return apiRequest('PUT', `/comments/${commentId}`, {
+    return apiRequest('PUT', `comments/${commentId}`, {
       content
     });
   },
 
   // Delete comment
   deleteComment: async (commentId: string): Promise<ApiResponse> => {
-    return apiRequest('DELETE', `/comments/${commentId}`);
+    return apiRequest('DELETE', `comments/${commentId}`);
   },
 
   // Like/unlike a comment
   toggleCommentLike: async (commentId: string): Promise<ApiResponse<{ isLiked: boolean; likeCount: number }>> => {
-    return apiRequest('POST', `/comments/${commentId}/like`);
+    return apiRequest('POST', `comments/${commentId}/like`);
   },
 
   // Get user's comments
@@ -82,14 +82,14 @@ export const commentService = {
     if (limit) params.append('limit', limit.toString());
     
     const query = params.toString();
-    const url = query ? `/comments/user?${query}` : '/comments/user';
+    const url = query ? `comments/user?${query}` : 'comments/user';
     
     return apiRequest('GET', url);
   },
 
   // Report comment
   reportComment: async (commentId: string, reason: string, description?: string): Promise<ApiResponse> => {
-    return apiRequest('POST', `/comments/${commentId}/report`, {
+    return apiRequest('POST', `comments/${commentId}/report`, {
       reason,
       description
     });
@@ -97,7 +97,7 @@ export const commentService = {
 
   // Get comment by ID
   getCommentById: async (commentId: string): Promise<ApiResponse<Comment>> => {
-    return apiRequest('GET', `/comments/${commentId}`);
+    return apiRequest('GET', `comments/${commentId}`);
   },
 
   // Search comments
@@ -114,6 +114,6 @@ export const commentService = {
     if (limit) params.append('limit', limit.toString());
     
     const queryString = params.toString();
-    return apiRequest('GET', `/comments/search?${queryString}`);
+    return apiRequest('GET', `comments/search?${queryString}`);
   }
 };

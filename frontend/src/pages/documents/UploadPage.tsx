@@ -5,6 +5,8 @@
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, ProgressBar } from 'react-bootstrap';
 import { FaUpload, FaFileAlt, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { documentService } from '../../services/documentService';
+import { useNavigate } from 'react-router-dom';
 
 interface UploadFormData {
   title: string;
@@ -19,6 +21,7 @@ interface UploadFormData {
 }
 
 const UploadPage: React.FC = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState<UploadFormData>({
     title: '',
     description: '',
@@ -102,18 +105,28 @@ const UploadPage: React.FC = () => {
 
     setUploading(true);
     setUploadStatus('idle');
+    setUploadProgress(0);
     
     try {
-      // Simulate upload progress
-      for (let i = 0; i <= 100; i += 10) {
-        setUploadProgress(i);
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      
-      // TODO: Implement actual file upload to backend
-      console.log('Upload form data:', formData);
+      // Call the actual document upload service
+      await documentService.uploadDocument(
+        {
+          title: formData.title,
+          description: formData.description,
+          subject: formData.subject,
+          university: formData.university,
+          creditCost: formData.creditCost,
+          isPublic: formData.isPublic,
+          isPremium: formData.isPremium,
+          tags: formData.tags
+        },
+        formData.file!,
+        (progress) => setUploadProgress(progress)
+      );
       
       setUploadStatus('success');
+      
+      // Reset form
       setFormData({
         title: '',
         description: '',
@@ -125,15 +138,18 @@ const UploadPage: React.FC = () => {
         tags: '',
         file: null
       });
-    } catch (error) {
-      setErrorMessage('Có lỗi xảy ra khi tải lên tài liệu');
+      
+      // Redirect to my documents after 2 seconds
+      setTimeout(() => {
+        navigate('/profile?tab=documents');
+      }, 2000);
+      
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      setErrorMessage(error?.error || error?.message || 'Có lỗi xảy ra khi tải lên tài liệu');
       setUploadStatus('error');
     } finally {
       setUploading(false);
-      setTimeout(() => {
-        setUploadProgress(0);
-        setUploadStatus('idle');
-      }, 2000);
     }
   };
 
@@ -248,19 +264,6 @@ const UploadPage: React.FC = () => {
                   </Col>
                 </Row>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Mô tả *</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={4}
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    placeholder="Mô tả chi tiết về nội dung tài liệu, phạm vi kiến thức, đối tượng sử dụng..."
-                    required
-                  />
-                </Form.Group>
-
                 <Row>
                   <Col md={6}>
                     <Form.Group className="mb-3">
@@ -282,14 +285,29 @@ const UploadPage: React.FC = () => {
                         value={formData.creditCost}
                         onChange={handleInputChange}
                       >
-                        <option value={1}>1 credit (Miễn phí)</option>
+                        <option value={0}>0 credits (Miễn phí)</option>
+                        <option value={1}>1 credit</option>
                         <option value={2}>2 credits</option>
                         <option value={3}>3 credits</option>
                         <option value={5}>5 credits</option>
+                        <option value={10}>10 credits</option>
                       </Form.Select>
                     </Form.Group>
                   </Col>
                 </Row>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Mô tả *</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={4}
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    placeholder="Mô tả chi tiết về nội dung tài liệu, phạm vi kiến thức, đối tượng sử dụng..."
+                    required
+                  />
+                </Form.Group>
 
                 <Form.Group className="mb-3">
                   <Form.Label>Tags (phân cách bằng dấu phẩy)</Form.Label>

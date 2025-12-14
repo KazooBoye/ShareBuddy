@@ -6,7 +6,9 @@ import axios, { AxiosResponse, AxiosError } from 'axios';
 import { ApiResponse } from '../types';
 
 // API base configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL 
+  ? `${process.env.REACT_APP_API_URL}/api`
+  : 'http://localhost:5000/api';
 
 // Create axios instance
 const apiClient = axios.create({
@@ -86,7 +88,7 @@ export const uploadFile = async (
   onProgress?: (progress: number) => void
 ): Promise<ApiResponse> => {
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('document', file);  // Changed from 'file' to 'document' to match backend
   
   if (additionalData) {
     Object.keys(additionalData).forEach(key => {

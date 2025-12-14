@@ -229,10 +229,12 @@ export interface UpdatePasswordForm {
 export interface DocumentUploadForm {
   title: string;
   description: string;
-  category: string;
   subject: string;
+  university?: string;
   creditCost: number;
-  tags?: string[];
+  isPublic?: boolean;
+  isPremium?: boolean;
+  tags?: string | string[];
 }
 
 export interface DocumentSearchParams {

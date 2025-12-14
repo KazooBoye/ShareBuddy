@@ -58,11 +58,11 @@ passport.use(new GoogleStrategy({
       
       // Update OAuth token if needed
       await query(
-        `INSERT INTO oauth_tokens (user_id, provider, provider_user_id, access_token, refresh_token)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO oauth_tokens (user_id, provider, access_token, refresh_token)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (user_id, provider) 
-         DO UPDATE SET access_token = $4, refresh_token = $5, updated_at = NOW()`,
-        [user.user_id, 'google', googleId, accessToken, refreshToken]
+         DO UPDATE SET access_token = $3, refresh_token = $4, updated_at = NOW()`,
+        [user.user_id, 'google', accessToken, refreshToken]
       );
       
       return done(null, user);
@@ -85,11 +85,11 @@ passport.use(new GoogleStrategy({
       
       // Store OAuth token
       await query(
-        `INSERT INTO oauth_tokens (user_id, provider, provider_user_id, access_token, refresh_token)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO oauth_tokens (user_id, provider, access_token, refresh_token)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (user_id, provider) 
-         DO UPDATE SET access_token = $4, refresh_token = $5, updated_at = NOW()`,
-        [user.user_id, 'google', googleId, accessToken, refreshToken]
+         DO UPDATE SET access_token = $3, refresh_token = $4, updated_at = NOW()`,
+        [user.user_id, 'google', accessToken, refreshToken]
       );
       
       return done(null, user);
@@ -102,7 +102,7 @@ passport.use(new GoogleStrategy({
       `INSERT INTO users (email, username, full_name, google_id, avatar_url, email_verified, credits)
        VALUES ($1, $2, $3, $4, $5, TRUE, 10)
        RETURNING *`,
-      [email, username, fullName, googleId, avatar, 10]
+      [email, username, fullName, googleId, avatar]
     );
 
     const newUser = result.rows[0];
@@ -116,9 +116,9 @@ passport.use(new GoogleStrategy({
 
     // Store OAuth token
     await query(
-      `INSERT INTO oauth_tokens (user_id, provider, provider_user_id, access_token, refresh_token)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [newUser.user_id, 'google', googleId, accessToken, refreshToken]
+      `INSERT INTO oauth_tokens (user_id, provider, access_token, refresh_token)
+       VALUES ($1, $2, $3, $4)`,
+      [newUser.user_id, 'google', accessToken, refreshToken]
     );
 
     return done(null, newUser);
@@ -158,11 +158,11 @@ passport.use(new FacebookStrategy({
       
       // Update OAuth token
       await query(
-        `INSERT INTO oauth_tokens (user_id, provider, provider_user_id, access_token, refresh_token)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO oauth_tokens (user_id, provider, access_token, refresh_token)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (user_id, provider) 
-         DO UPDATE SET access_token = $4, refresh_token = $5, updated_at = NOW()`,
-        [user.user_id, 'facebook', facebookId, accessToken, refreshToken]
+         DO UPDATE SET access_token = $3, refresh_token = $4, updated_at = NOW()`,
+        [user.user_id, 'facebook', accessToken, refreshToken]
       );
       
       return done(null, user);
@@ -185,11 +185,11 @@ passport.use(new FacebookStrategy({
       
       // Store OAuth token
       await query(
-        `INSERT INTO oauth_tokens (user_id, provider, provider_user_id, access_token, refresh_token)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO oauth_tokens (user_id, provider, access_token, refresh_token)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (user_id, provider) 
-         DO UPDATE SET access_token = $4, refresh_token = $5, updated_at = NOW()`,
-        [user.user_id, 'facebook', facebookId, accessToken, refreshToken]
+         DO UPDATE SET access_token = $3, refresh_token = $4, updated_at = NOW()`,
+        [user.user_id, 'facebook', accessToken, refreshToken]
       );
       
       return done(null, user);
@@ -216,9 +216,9 @@ passport.use(new FacebookStrategy({
 
     // Store OAuth token
     await query(
-      `INSERT INTO oauth_tokens (user_id, provider, provider_user_id, access_token, refresh_token)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [newUser.user_id, 'facebook', facebookId, accessToken, refreshToken]
+      `INSERT INTO oauth_tokens (user_id, provider, access_token, refresh_token)
+       VALUES ($1, $2, $3, $4)`,
+      [newUser.user_id, 'facebook', accessToken, refreshToken]
     );
 
     return done(null, newUser);

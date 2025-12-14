@@ -8,7 +8,7 @@ const config = require('../config/config');
 
 // Create transporter
 const createTransporter = () => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: config.EMAIL_USER,

@@ -8,32 +8,32 @@ import { ApiResponse, User, LoginForm, RegisterForm, UpdatePasswordForm } from '
 export const authService = {
   // User registration
   register: async (data: RegisterForm): Promise<ApiResponse<{ user: User; token: string }>> => {
-    return apiRequest('POST', '/auth/register', data);
+    return apiRequest('POST', 'auth/register', data);
   },
 
   // User login
   login: async (data: LoginForm): Promise<ApiResponse<{ user: User; token: string }>> => {
-    return apiRequest('POST', '/auth/login', data);
+    return apiRequest('POST', 'auth/login', data);
   },
 
   // Logout user
   logout: async (): Promise<ApiResponse> => {
-    return apiRequest('POST', '/auth/logout');
+    return apiRequest('POST', 'auth/logout');
   },
 
   // Get current user profile
   getProfile: async (): Promise<ApiResponse<User>> => {
-    return apiRequest('GET', '/auth/profile');
+    return apiRequest('GET', 'auth/me');
   },
 
   // Update user profile
   updateProfile: async (data: Partial<User>): Promise<ApiResponse<User>> => {
-    return apiRequest('PUT', '/auth/profile', data);
+    return apiRequest('PUT', 'auth/update-profile', data);
   },
 
   // Update password
   updatePassword: async (data: UpdatePasswordForm): Promise<ApiResponse> => {
-    return apiRequest('PUT', '/auth/password', data);
+    return apiRequest('PUT', 'auth/change-password', data);
   },
 
   // Upload avatar
@@ -41,29 +41,29 @@ export const authService = {
     const formData = new FormData();
     formData.append('avatar', file);
     
-    return apiRequest('POST', '/auth/avatar', formData, {
+    return apiRequest('POST', 'users/upload-avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
 
   // Request password reset
   requestPasswordReset: async (email: string): Promise<ApiResponse> => {
-    return apiRequest('POST', '/auth/forgot-password', { email });
+    return apiRequest('POST', 'auth/forgot-password', { email });
   },
 
   // Reset password with token
   resetPassword: async (token: string, newPassword: string): Promise<ApiResponse> => {
-    return apiRequest('POST', '/auth/reset-password', { token, newPassword });
+    return apiRequest('POST', 'auth/reset-password', { token, newPassword });
   },
 
   // Verify email
   verifyEmail: async (token: string): Promise<ApiResponse> => {
-    return apiRequest('POST', '/auth/verify-email', { token });
+    return apiRequest('POST', 'auth/verify-email', { token });
   },
 
   // Resend verification email
   resendVerification: async (): Promise<ApiResponse> => {
-    return apiRequest('POST', '/auth/resend-verification');
+    return apiRequest('POST', 'auth/resend-verification');
   }
 };
 

@@ -17,14 +17,14 @@ export const ratingService = {
     if (limit) params.append('limit', limit.toString());
     
     const query = params.toString();
-    const url = query ? `/ratings/document/${documentId}?${query}` : `/ratings/document/${documentId}`;
+    const url = query ? `ratings/document/${documentId}?${query}` : `ratings/document/${documentId}`;
     
     return apiRequest('GET', url);
   },
 
   // Add rating for a document
   addRating: async (documentId: string, rating: number, comment?: string): Promise<ApiResponse<Rating>> => {
-    return apiRequest('POST', '/ratings', {
+    return apiRequest('POST', 'ratings', {
       documentId,
       rating,
       comment
@@ -33,7 +33,7 @@ export const ratingService = {
 
   // Update existing rating
   updateRating: async (ratingId: string, rating: number, comment?: string): Promise<ApiResponse<Rating>> => {
-    return apiRequest('PUT', `/ratings/${ratingId}`, {
+    return apiRequest('PUT', `ratings/${ratingId}`, {
       rating,
       comment
     });
@@ -41,17 +41,17 @@ export const ratingService = {
 
   // Delete rating
   deleteRating: async (ratingId: string): Promise<ApiResponse> => {
-    return apiRequest('DELETE', `/ratings/${ratingId}`);
+    return apiRequest('DELETE', `ratings/${ratingId}`);
   },
 
   // Like/unlike a rating
   toggleRatingLike: async (ratingId: string): Promise<ApiResponse<{ isLiked: boolean; likeCount: number }>> => {
-    return apiRequest('POST', `/ratings/${ratingId}/like`);
+    return apiRequest('POST', `ratings/${ratingId}/like`);
   },
 
   // Get user's rating for a document
   getUserRating: async (documentId: string): Promise<ApiResponse<Rating | null>> => {
-    return apiRequest('GET', `/ratings/document/${documentId}/user-rating`);
+    return apiRequest('GET', `ratings/document/${documentId}/user-rating`);
   },
 
   // Get user's all ratings
@@ -66,7 +66,7 @@ export const ratingService = {
     if (limit) params.append('limit', limit.toString());
     
     const query = params.toString();
-    const url = query ? `/ratings/user?${query}` : '/ratings/user';
+    const url = query ? `ratings/user?${query}` : 'ratings/user';
     
     return apiRequest('GET', url);
   },
@@ -83,6 +83,6 @@ export const ratingService = {
       5: number;
     };
   }>> => {
-    return apiRequest('GET', `/ratings/document/${documentId}/stats`);
+    return apiRequest('GET', `ratings/document/${documentId}/stats`);
   }
 };
