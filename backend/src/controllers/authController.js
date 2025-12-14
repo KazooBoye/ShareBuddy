@@ -385,32 +385,76 @@ const verifyEmail = async (req, res, next) => {
   }
 };
 
-const googleAuth = async (req, res) => {
-  res.status(501).json({
-    success: false,
-    error: 'Đăng nhập Google chưa được triển khai'
-  });
+// Google OAuth - Initiate authentication
+const googleAuth = async (req, res, next) => {
+  const passport = require('passport');
+  require('../config/passport'); // Load passport config
+  
+  passport.authenticate('google', {
+    scope: ['profile', 'email']
+  })(req, res, next);
 };
 
-const googleCallback = async (req, res) => {
-  res.status(501).json({
-    success: false,
-    error: 'Google OAuth callback chưa được triển khai'
-  });
+// Google OAuth - Handle callback
+const googleCallback = async (req, res, next) => {
+  const passport = require('passport');
+  require('../config/passport');
+  
+  passport.authenticate('google', {
+    session: false,
+    failureRedirect: `${config.FRONTEND_URL}/login?error=google_auth_failed`
+  }, (err, user, info) => {
+    if (err) {
+      console.error('Google OAuth error:', err);
+      return res.redirect(`${config.FRONTEND_URL}/login?error=google_auth_error`);
+    }
+    
+    if (!user) {
+      return res.redirect(`${config.FRONTEND_URL}/login?error=google_no_user`);
+    }
+    
+    // Generate JWT token
+    const token = generateToken(user.user_id);
+    
+    // Redirect to frontend with token
+    res.redirect(`${config.FRONTEND_URL}/oauth-success?token=${token}`);
+  })(req, res, next);
 };
 
-const facebookAuth = async (req, res) => {
-  res.status(501).json({
-    success: false,
-    error: 'Đăng nhập Facebook chưa được triển khai'
-  });
+// Facebook OAuth - Initiate authentication
+const facebookAuth = async (req, res, next) => {
+  const passport = require('passport');
+  require('../config/passport');
+  
+  passport.authenticate('facebook', {
+    scope: ['email']
+  })(req, res, next);
 };
 
-const facebookCallback = async (req, res) => {
-  res.status(501).json({
-    success: false,
-    error: 'Facebook OAuth callback chưa được triển khai'
-  });
+// Facebook OAuth - Handle callback
+const facebookCallback = async (req, res, next) => {
+  const passport = require('passport');
+  require('../config/passport');
+  
+  passport.authenticate('facebook', {
+    session: false,
+    failureRedirect: `${config.FRONTEND_URL}/login?error=facebook_auth_failed`
+  }, (err, user, info) => {
+    if (err) {
+      console.error('Facebook OAuth error:', err);
+      return res.redirect(`${config.FRONTEND_URL}/login?error=facebook_auth_error`);
+    }
+    
+    if (!user) {
+      return res.redirect(`${config.FRONTEND_URL}/login?error=facebook_no_user`);
+    }
+    
+    // Generate JWT token
+    const token = generateToken(user.user_id);
+    
+    // Redirect to frontend with token
+    res.redirect(`${config.FRONTEND_URL}/oauth-success?token=${token}`);
+  })(req, res, next);
 };
 
 const updateProfile = async (req, res) => {

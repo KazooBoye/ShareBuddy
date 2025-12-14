@@ -22,12 +22,22 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import OAuthSuccessPage from './pages/auth/OAuthSuccessPage';
+import VerifyEmailPage from './pages/auth/VerifyEmailPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import DocumentDetailPage from './pages/documents/DocumentDetailPage';
 import DocumentsPage from './pages/documents/DocumentsPage';
 import UploadPage from './pages/documents/UploadPage';
 import ProfilePage from './pages/user/ProfilePage';
 import DashboardPage from './pages/user/DashboardPage';
 import AdminPage from './pages/admin/AdminPage';
+import QuestionDetailPage from './pages/QuestionDetailPage';
+import VerifiedAuthorsPage from './pages/VerifiedAuthorsPage';
+import VerifiedAuthorRequestPage from './pages/VerifiedAuthorRequestPage';
+import PurchaseCreditsPage from './pages/PurchaseCreditsPage';
+import PaymentHistoryPage from './pages/PaymentHistoryPage';
+import SearchPage from './pages/SearchPage';
 
 // Styles
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -68,8 +78,11 @@ const AppContent: React.FC = () => {
               <Route path="/" element={<HomePage />} />
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/documents/:id" element={<DocumentDetailPage />} />
+              <Route path="/questions/:questionId" element={<QuestionDetailPage />} />
+              <Route path="/verified-authors" element={<VerifiedAuthorsPage />} />
+              <Route path="/search" element={<SearchPage />} />
               
-              {/* Auth Routes */}
+              {/* Auth Routes */
               <Route 
                 path="/login" 
                 element={
@@ -82,13 +95,20 @@ const AppContent: React.FC = () => {
                   isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />
                 } 
               />
-
+              <Route path="/oauth-success" element={<OAuthSuccessPage />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               {/* Protected Routes */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/upload" element={<UploadPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/profile/:userId" element={<ProfilePage />} />
+                <Route path="/admin" element={<AdminPage />} />
+                <Route path="/verified-author/request" element={<VerifiedAuthorRequestPage />} />
+                <Route path="/purchase-credits" element={<PurchaseCreditsPage />} />
+                <Route path="/payment-history" element={<PaymentHistoryPage />} />
+              </Route> path="/profile/:userId" element={<ProfilePage />} />
                 <Route path="/admin" element={<AdminPage />} />
               </Route>
 

@@ -11,6 +11,8 @@ const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const session = require('express-session');
+const passport = require('./config/passport');
 
 // Import middleware and routes
 const errorHandler = require('./middleware/errorHandler');
@@ -20,6 +22,12 @@ const { connectDB } = require('./config/database');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const documentRoutes = require('./routes/documentRoutes');
+const questionRoutes = require('./routes/questionRoutes');
+const previewRoutes = require('./routes/previewRoutes');
+const recommendationRoutes = require('./routes/recommendationRoutes');
+const verifiedAuthorRoutes = require('./routes/verifiedAuthorRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const searchRoutes = require('./routes/searchRoutes');
 // Keep problematic routes disabled
 // const ratingRoutes = require('./routes/ratingRoutes');
 // const commentRoutes = require('./routes/commentRoutes');
@@ -58,6 +66,22 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Session configuration for OAuth
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'sharebuddy-session-secret-2024',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
 // Static files - serve uploaded documents
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -65,6 +89,12 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/questions', questionRoutes);
+app.use('/api/preview', previewRoutes);
+app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/verified-author', verifiedAuthorRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/search', searchRoutes);
 // Keep problematic routes disabled for now
 // app.use('/api/ratings', ratingRoutes);
 // app.use('/api/comments', commentRoutes);
@@ -91,6 +121,12 @@ app.use('*', (req, res) => {
       '/api/auth',
       '/api/users', 
       '/api/documents',
+      '/api/questions',
+      '/api/preview',
+      '/api/recommendations',
+      '/api/verified-author',
+      '/api/payment',
+      '/api/search',
       '/api/ratings',
       '/api/comments',
       '/api/credits',

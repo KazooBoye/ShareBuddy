@@ -1,0 +1,174 @@
+/**
+ * Payment History Page - View transaction history
+ */
+
+import React, { useState, useEffect } from 'react';
+import { Container, Table, Badge, Spinner, Alert, Card, Pagination } from 'react-bootstrap';
+import axios from 'axios';
+import { useAuth } from '../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+
+interface Transaction {
+  transaction_id: string;
+  package_id: string;
+  credits: number;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  stripe_payment_intent_id: string;
+  created_at: string;
+}
+
+const PaymentHistoryPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated, token } = useAuth();
+
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
+    fetchHistory();
+  }, [isAuthenticated, currentPage]);
+
+  const fetchHistory = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('/api/payment/history', {
+        params: { page: currentPage, limit: 10 },
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setTransactions(response.data.data.transactions);
+      setTotalPages(response.data.data.pagination.totalPages);
+      setLoading(false);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to load history');
+      setLoading(false);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <Badge bg="success">Completed</Badge>;
+      case 'pending':
+        return <Badge bg="warning">Pending</Badge>;
+      case 'failed':
+        return <Badge bg="danger">Failed</Badge>;
+      case 'refunded':
+        return <Badge bg="secondary">Refunded</Badge>;
+      default:
+        return <Badge bg="secondary">{status}</Badge>;
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatAmount = (amount: number, currency: string) => {
+    if (currency === 'usd') {
+      return `$${(amount / 100).toFixed(2)}`;
+    } else {
+      return `${amount.toLocaleString('vi-VN')} VND`;
+    }
+  };
+
+  if (loading) {
+    return (
+      <Container className="py-5 text-center" style={{ marginTop: '80px' }}>
+        <Spinner animation="border" variant="primary" />
+        <p className="mt-3">Loading history...</p>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container className="py-5" style={{ marginTop: '80px' }}>
+        <Alert variant="danger">{error}</Alert>
+      </Container>
+    );
+  }
+
+  return (
+    <Container className="py-4" style={{ marginTop: '80px', maxWidth: '1200px' }}>
+      <h2 className="mb-4">📊 Payment History</h2>
+
+      {transactions.length === 0 ? (
+        <Card className="text-center py-5">
+          <Card.Body>
+            <p className="text-muted mb-0">No transactions yet</p>
+          </Card.Body>
+        </Card>
+      ) : (
+        <>
+          <Table responsive striped hover>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Credits</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Transaction ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((tx) => (
+                <tr key={tx.transaction_id}>
+                  <td>{formatDate(tx.created_at)}</td>
+                  <td className="text-primary fw-bold">+{tx.credits} credits</td>
+                  <td>{formatAmount(tx.amount, tx.currency)}</td>
+                  <td>{getStatusBadge(tx.status)}</td>
+                  <td>
+                    <code className="small">{tx.transaction_id.slice(0, 8)}...</code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+
+          {totalPages > 1 && (
+            <div className="d-flex justify-content-center mt-4">
+              <Pagination>
+                <Pagination.Prev 
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(p => p - 1)}
+                />
+                {[...Array(totalPages)].map((_, i) => (
+                  <Pagination.Item
+                    key={i + 1}
+                    active={i + 1 === currentPage}
+                    onClick={() => setCurrentPage(i + 1)}
+                  >
+                    {i + 1}
+                  </Pagination.Item>
+                ))}
+                <Pagination.Next 
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(p => p + 1)}
+                />
+              </Pagination>
+            </div>
+          )}
+        </>
+      )}
+    </Container>
+  );
+};
+
+export default PaymentHistoryPage;

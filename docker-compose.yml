@@ -34,6 +34,23 @@ services:
       # Rate limiting
       - RATE_LIMIT_WINDOW=900000
       - RATE_LIMIT_MAX=100
+      # Module 1: Email Configuration
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - EMAIL_FROM=${EMAIL_FROM:-ShareBuddy <noreply@sharebuddy.com>}
+      - EMAIL_VERIFICATION_EXPIRES=${EMAIL_VERIFICATION_EXPIRES:-24h}
+      - PASSWORD_RESET_EXPIRES=${PASSWORD_RESET_EXPIRES:-1h}
+      # Module 2: OAuth Configuration
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL:-http://localhost:5001/api/auth/google/callback}
+      - FACEBOOK_APP_ID=${FACEBOOK_APP_ID}
+      - FACEBOOK_APP_SECRET=${FACEBOOK_APP_SECRET}
+      - FACEBOOK_CALLBACK_URL=${FACEBOOK_CALLBACK_URL:-http://localhost:5001/api/auth/facebook/callback}
+      # Module 3: Stripe Configuration
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
     volumes:
       - backend-uploads:/app/uploads
     networks:

@@ -1,6 +1,16 @@
 # Backend Dockerfile for ShareBuddy
 FROM node:18-alpine
 
+# Install system dependencies for canvas and PDF processing
+RUN apk add --no-cache \
+    build-base \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev \
+    pixman-dev \
+    python3
+
 # Set working directory
 WORKDIR /app
 
