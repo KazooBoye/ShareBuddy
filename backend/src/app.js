@@ -28,23 +28,37 @@ const recommendationRoutes = require('./routes/recommendationRoutes');
 const verifiedAuthorRoutes = require('./routes/verifiedAuthorRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const searchRoutes = require('./routes/searchRoutes');
+const creditRoutes = require('./routes/creditRoutes');
 // Keep problematic routes disabled
 // const ratingRoutes = require('./routes/ratingRoutes');
 // const commentRoutes = require('./routes/commentRoutes');
-// const creditRoutes = require('./routes/creditRoutes');
 // const socialRoutes = require('./routes/socialRoutes');
 // const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+// Rate limiting configuration
+// Strict rate limiter for authentication endpoints (login, register)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 auth requests per windowMs
+  message: {
+    error: 'Quá nhiều requests đăng nhập/đăng ký, vui lòng thử lại sau.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Lenient rate limiter for general API endpoints
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // limit each IP to 1000 requests per windowMs
   message: {
     error: 'Quá nhiều requests từ IP này, vui lòng thử lại sau.'
-  }
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // Middleware setup
@@ -57,7 +71,8 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-app.use(limiter);
+// Apply general rate limiter to all routes
+app.use(generalLimiter);
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
@@ -97,10 +112,10 @@ app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/verified-author', verifiedAuthorRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/credits', creditRoutes);
 // Keep problematic routes disabled for now
 // app.use('/api/ratings', ratingRoutes);
 // app.use('/api/comments', commentRoutes);
-// app.use('/api/credits', creditRoutes);
 // app.use('/api/social', socialRoutes);
 // app.use('/api/admin', adminRoutes);
 

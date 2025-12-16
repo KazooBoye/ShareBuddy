@@ -71,7 +71,8 @@ export const getCurrentUser = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await authService.getProfile();
-      return response.data;
+      // Backend returns data.user, so we need to extract the user object
+      return (response.data as any)?.user || response.data;
     } catch (error: any) {
       // If token is invalid, clear storage
       tokenService.clearAll();

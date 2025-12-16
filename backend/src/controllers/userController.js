@@ -21,7 +21,7 @@ const getProfile = async (req, res, next) => {
               COUNT(DISTINCT f2.follower_id) as follower_count,
               AVG(r.rating) as avg_rating
        FROM users u
-       LEFT JOIN documents d ON u.user_id = d.user_id AND d.status = 'approved'
+       LEFT JOIN documents d ON u.user_id = d.author_id AND d.status = 'approved'
        LEFT JOIN follows f1 ON u.user_id = f1.follower_id
        LEFT JOIN follows f2 ON u.user_id = f2.following_id
        LEFT JOIN ratings r ON d.document_id = r.document_id
@@ -382,14 +382,14 @@ const getUserDocuments = async (req, res, next) => {
     }
 
     const result = await query(
-      `SELECT d.document_id, d.title, d.description, d.file_url, d.thumbnail_url,
-              d.category, d.subject, d.credit_cost, d.download_count, d.status,
+      `SELECT d.document_id, d.title, d.description, d.file_path, d.file_name,
+              d.subject, d.credit_cost, d.download_count, d.view_count, d.status,
               d.created_at, d.updated_at,
               AVG(r.rating) as avg_rating,
               COUNT(r.rating_id) as rating_count
        FROM documents d
        LEFT JOIN ratings r ON d.document_id = r.document_id
-       WHERE d.user_id = $1 ${statusCondition}
+       WHERE d.author_id = $1 ${statusCondition}
        GROUP BY d.document_id
        ORDER BY d.created_at DESC
        LIMIT $2 OFFSET $3`,
@@ -398,8 +398,8 @@ const getUserDocuments = async (req, res, next) => {
 
     // Get total count
     const countQuery = statusCondition 
-      ? `SELECT COUNT(*) as total FROM documents WHERE user_id = $1 AND status = $2`
-      : `SELECT COUNT(*) as total FROM documents WHERE user_id = $1`;
+      ? `SELECT COUNT(*) as total FROM documents WHERE author_id = $1 AND status = $2`
+      : `SELECT COUNT(*) as total FROM documents WHERE author_id = $1`;
     
     const countParams = statusCondition ? [id, queryParams[3]] : [id];
     const countResult = await query(countQuery, countParams);
@@ -414,12 +414,12 @@ const getUserDocuments = async (req, res, next) => {
           id: row.document_id,
           title: row.title,
           description: row.description,
-          fileUrl: row.file_url,
-          thumbnailUrl: row.thumbnail_url,
-          category: row.category,
+          filePath: row.file_path,
+          fileName: row.file_name,
           subject: row.subject,
           creditCost: row.credit_cost,
           downloadCount: row.download_count,
+          viewCount: row.view_count,
           status: row.status,
           avgRating: row.avg_rating ? parseFloat(row.avg_rating).toFixed(1) : null,
           ratingCount: parseInt(row.rating_count),

@@ -8,7 +8,7 @@ import { ApiResponse, User, PaginatedResponse } from '../types';
 export const userService = {
   // Get user profile by ID
   getUserProfile: async (userId: string): Promise<ApiResponse<User>> => {
-    return apiRequest('GET', `users/${userId}`);
+    return apiRequest('GET', `users/profile/${userId}`);
   },
 
   // Get user by username
@@ -33,12 +33,12 @@ export const userService = {
 
   // Follow user
   followUser: async (userId: string): Promise<ApiResponse> => {
-    return apiRequest('POST', `users/${userId}/follow`);
+    return apiRequest('POST', `users/follow/${userId}`);
   },
 
   // Unfollow user
   unfollowUser: async (userId: string): Promise<ApiResponse> => {
-    return apiRequest('DELETE', `users/${userId}/follow`);
+    return apiRequest('DELETE', `users/follow/${userId}`);
   },
 
   // Get user's followers
@@ -52,7 +52,7 @@ export const userService = {
     if (limit) params.append('limit', limit.toString());
     
     const query = params.toString();
-    const url = query ? `users/${userId}/followers?${query}` : `users/${userId}/followers`;
+    const url = query ? `users/followers/${userId}?${query}` : `users/followers/${userId}`;
     
     return apiRequest('GET', url);
   },
@@ -68,7 +68,7 @@ export const userService = {
     if (limit) params.append('limit', limit.toString());
     
     const query = params.toString();
-    const url = query ? `users/${userId}/following?${query}` : `users/${userId}/following`;
+    const url = query ? `users/following/${userId}?${query}` : `users/following/${userId}`;
     
     return apiRequest('GET', url);
   },
@@ -78,13 +78,22 @@ export const userService = {
     userId: string, 
     page?: number, 
     limit?: number
-  ): Promise<ApiResponse<PaginatedResponse<any>>> => {
+  ): Promise<ApiResponse<{
+    documents: any[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalItems: number;
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+    };
+  }>> => {
     const params = new URLSearchParams();
     if (page) params.append('page', page.toString());
     if (limit) params.append('limit', limit.toString());
     
     const query = params.toString();
-    const url = query ? `users/${userId}/documents?${query}` : `users/${userId}/documents`;
+    const url = query ? `users/documents/${userId}?${query}` : `users/documents/${userId}`;
     
     return apiRequest('GET', url);
   },
@@ -101,12 +110,12 @@ export const userService = {
     creditsSpent: number;
     averageRating: number;
   }>> => {
-    return apiRequest('GET', `users/${userId}/stats`);
+    return apiRequest('GET', `users/stats/${userId}`);
   },
 
   // Update user profile
   updateProfile: async (data: Partial<User>): Promise<ApiResponse<User>> => {
-    return apiRequest('PUT', 'users/profile', data);
+    return apiRequest('PUT', 'users/me', data);
   },
 
   // Upload user avatar
@@ -114,7 +123,7 @@ export const userService = {
     file: File, 
     onProgress?: (progress: number) => void
   ): Promise<ApiResponse<{ avatarUrl: string }>> => {
-    return uploadFile('users/avatar', file, {}, onProgress);
+    return uploadFile('users/upload-avatar', file, {}, onProgress);
   },
 
   // Get user's credit history

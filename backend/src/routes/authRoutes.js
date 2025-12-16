@@ -5,10 +5,22 @@
 
 const express = require('express');
 const { body } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const authController = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Strict rate limiter for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 auth requests per windowMs
+  message: {
+    error: 'Quá nhiều requests đăng nhập/đăng ký, vui lòng thử lại sau.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Validation rules
 const registerValidation = [
@@ -40,15 +52,15 @@ const loginValidation = [
     .withMessage('Mật khẩu không được để trống')
 ];
 
-// Routes
-router.post('/register', registerValidation, authController.register);
-router.post('/login', loginValidation, authController.login);
+// Routes - Apply strict rate limiting to login/register only
+router.post('/register', authLimiter, registerValidation, authController.register);
+router.post('/login', authLimiter, loginValidation, authController.login);
 router.post('/logout', authController.logout);
 router.post('/refresh-token', authController.refreshToken);
-router.post('/forgot-password', authController.forgotPassword);
+router.post('/forgot-password', authLimiter, authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 router.get('/verify-email/:token', authController.verifyEmail);
-router.post('/resend-verification', authController.resendVerification);
+router.post('/resend-verification', authLimiter, authController.resendVerification);
 
 // OAuth routes
 router.get('/google', authController.googleAuth);
