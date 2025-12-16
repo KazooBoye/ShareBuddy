@@ -4,9 +4,10 @@
 
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, ProgressBar } from 'react-bootstrap';
-import { FaUpload, FaFileAlt, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaUpload, FaFileAlt, FaCheckCircle, FaExclamationTriangle, FaClock } from 'react-icons/fa';
 import { documentService } from '../../services/documentService';
 import { useNavigate } from 'react-router-dom';
+import ModerationStatusBadge from '../../components/ModerationStatusBadge';
 
 interface UploadFormData {
   title: string;
@@ -36,8 +37,9 @@ const UploadPage: React.FC = () => {
   
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'pending' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [moderationInfo, setModerationInfo] = useState<{ jobId: string; status: string } | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -108,8 +110,7 @@ const UploadPage: React.FC = () => {
     setUploadProgress(0);
     
     try {
-      // Call the actual document upload service
-      await documentService.uploadDocument(
+      const response = await documentService.uploadDocument(
         {
           title: formData.title,
           description: formData.description,
@@ -124,7 +125,16 @@ const UploadPage: React.FC = () => {
         (progress) => setUploadProgress(progress)
       );
       
-      setUploadStatus('success');
+      // Check if document is pending moderation
+      const documentStatus = response.data?.status || 'approved';
+      const moderation = response.data?.moderation;
+      
+      if (documentStatus === 'pending') {
+        setUploadStatus('pending');
+        setModerationInfo(moderation || null);
+      } else {
+        setUploadStatus('success');
+      }
       
       // Reset form
       setFormData({
@@ -139,10 +149,10 @@ const UploadPage: React.FC = () => {
         file: null
       });
       
-      // Redirect to my documents after 2 seconds
+      // Redirect to my documents after 3 seconds
       setTimeout(() => {
         navigate('/profile?tab=documents');
-      }, 2000);
+      }, 3000);
       
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -176,6 +186,29 @@ const UploadPage: React.FC = () => {
                 <Alert variant="success" className="d-flex align-items-center">
                   <FaCheckCircle className="me-2" />
                   Tài liệu đã được tải lên thành công và đã có sẵn để tải xuống!
+                </Alert>
+              )}
+
+              {uploadStatus === 'pending' && (
+                <Alert variant="warning" className="mb-3">
+                  <div className="d-flex align-items-start">
+                    <FaClock className="me-2 mt-1" size={20} />
+                    <div className="flex-grow-1">
+                      <h6 className="mb-2">
+                        <ModerationStatusBadge status="pending" size="md" />
+                      </h6>
+                      <p className="mb-2">
+                        Tài liệu của bạn đã được tải lên thành công và đang được hệ thống AI kiểm duyệt tự động. 
+                        Quá trình này thường mất 2-5 giây.
+                      </p>
+                      <p className="mb-0 small text-muted">
+                        💡 Bạn sẽ nhận được thông báo ngay khi tài liệu được phê duyệt và có thể tải xuống.
+                        {moderationInfo && (
+                          <span className="d-block mt-1">Job ID: {moderationInfo.jobId}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
                 </Alert>
               )}
 

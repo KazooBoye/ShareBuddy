@@ -29,6 +29,7 @@ const verifiedAuthorRoutes = require('./routes/verifiedAuthorRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const creditRoutes = require('./routes/creditRoutes');
+const webhookRoutes = require('./routes/webhookRoutes');
 // Keep problematic routes disabled
 // const ratingRoutes = require('./routes/ratingRoutes');
 // const commentRoutes = require('./routes/commentRoutes');
@@ -113,6 +114,7 @@ app.use('/api/verified-author', verifiedAuthorRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/credits', creditRoutes);
+app.use('/api/webhooks', webhookRoutes);
 // Keep problematic routes disabled for now
 // app.use('/api/ratings', ratingRoutes);
 // app.use('/api/comments', commentRoutes);
@@ -164,6 +166,11 @@ const startServer = async () => {
     await connectDB();
     console.log('✅ Database connected successfully');
     
+    // Initialize moderation queue
+    const { initQueue } = require('./services/moderationQueue');
+    await initQueue();
+    console.log('✅ Moderation queue initialized');
+    
     // Start server
     app.listen(PORT, () => {
       console.log(`🚀 ShareBuddy server running on port ${PORT}`);
@@ -190,13 +197,17 @@ process.on('uncaughtException', (err) => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('👋 SIGTERM received. Shutting down gracefully...');
+  const { closeQueue } = require('./services/moderationQueue');
+  await closeQueue();
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('👋 SIGINT received. Shutting down gracefully...');
+  const { closeQueue } = require('./services/moderationQueue');
+  await closeQueue();
   process.exit(0);
 });
 

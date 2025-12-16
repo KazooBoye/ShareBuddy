@@ -346,7 +346,7 @@ const uploadDocument = async (req, res, next) => {
     } = req.body;
 
     const userId = req.user.user_id;
-    const fileUrl = `/uploads/documents/${req.file.filename}`;
+    const fileUrl = `/uploads/temp/${req.file.filename}`; // Temp path
     const fileName = req.file.originalname;
     const fileSize = req.file.size;
     const fileType = path.extname(req.file.originalname).toLowerCase().slice(1);
@@ -366,22 +366,35 @@ const uploadDocument = async (req, res, next) => {
     });
     
     let document;
+    let moderationJob;
     
     // Use transaction to ensure all operations succeed or fail together
     console.log(`[${requestId}] 🔄 Starting transaction for user ${userId}`);
     await withTransaction(async (client) => {
-      console.log(`[${requestId}] 📝 Inserting document...`);
+      console.log(`[${requestId}] 📝 Inserting document with status 'pending'...`);
       
-      // Create document with status 'approved' (immediately available)
+      // Create document with status 'pending' (awaiting moderation)
       const result = await client.query(
         `INSERT INTO documents (author_id, title, description, file_path, file_name, file_size, file_type, subject, university, credit_cost, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING document_id, title, description, file_path, file_name, file_size, file_type, subject, university, credit_cost, status, created_at`,
-        [userId, title, description, fileUrl, fileName, fileSize, fileType, subject, university || null, parseInt(creditCost) || 0, 'approved']
+        [userId, title, description, fileUrl, fileName, fileSize, fileType, subject, university || null, parseInt(creditCost) || 0, 'pending']
       );
 
       document = result.rows[0];
-      console.log(`[${requestId}] ✅ Document created with ID: ${document.document_id}`);
+      console.log(`[${requestId}] ✅ Document created with ID: ${document.document_id}, status: pending`);
+      
+      // Create moderation job
+      console.log(`[${requestId}] 📊 Creating moderation job...`);
+      const moderationResult = await client.query(
+        `INSERT INTO moderation_jobs (document_id, moderation_status)
+         VALUES ($1, $2)
+         RETURNING job_id, document_id, moderation_status`,
+        [document.document_id, 'queued']
+      );
+      
+      moderationJob = moderationResult.rows[0];
+      console.log(`[${requestId}] ✅ Moderation job created: ${moderationJob.job_id}`);
       
       // Record credit transaction (trigger will auto-update user credits)
       console.log(`[${requestId}] 📊 Recording credit transaction (trigger will update credits automatically)...`);
@@ -393,6 +406,25 @@ const uploadDocument = async (req, res, next) => {
       console.log(`[${requestId}] ✅ Transaction recorded - trigger awarded 1 credit`);
     });
     console.log(`[${requestId}] ✅ Transaction completed successfully`);
+    
+    // Push job to Redis queue (outside transaction)
+    try {
+      const { addModerationJob } = require('../services/moderationQueue');
+      await addModerationJob({
+        document_id: document.document_id,
+        file_path: path.join(__dirname, '../..', document.file_path),
+        metadata: {
+          title: document.title,
+          file_type: document.file_type,
+          file_size: document.file_size,
+          author_id: userId
+        }
+      });
+      console.log(`[${requestId}] ✅ Job pushed to Redis queue`);
+    } catch (queueError) {
+      console.error(`[${requestId}] ⚠️ Failed to push to queue:`, queueError);
+      // Don't fail the upload, job can be retried later
+    }
     
     // Process and insert tags if provided
     if (tags) {
@@ -411,25 +443,28 @@ const uploadDocument = async (req, res, next) => {
       }
     }
     
-    console.log(`[${requestId}] 🎉 Document created successfully:`, document);
+    console.log(`[${requestId}] 🎉 Document uploaded successfully - awaiting moderation`);
 
     res.status(201).json({
       success: true,
-      message: 'Tài liệu đã được tải lên thành công và đã có sẵn để tải xuống!',
+      message: 'Tài liệu đã được tải lên và đang được kiểm duyệt. Bạn sẽ nhận được thông báo khi tài liệu được duyệt.',
       data: {
         document: {
           id: document.document_id,
           title: document.title,
           description: document.description,
-          fileUrl: document.file_path,
           fileName: document.file_name,
           fileSize: document.file_size,
           fileType: document.file_type,
           subject: document.subject,
           university: document.university,
           creditCost: document.credit_cost,
-          status: document.status,
+          status: document.status, // 'pending'
           createdAt: document.created_at
+        },
+        moderation: {
+          jobId: moderationJob.job_id,
+          status: moderationJob.moderation_status // 'queued'
         }
       }
     });

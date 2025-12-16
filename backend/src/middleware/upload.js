@@ -7,10 +7,11 @@ const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-// Configure storage
+// Configure storage - use temp directory for moderation
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../uploads/documents'));
+    // Upload to temp folder first, will move to documents/ after approval
+    cb(null, path.join(__dirname, '../../uploads/temp'));
   },
   filename: (req, file, cb) => {
     // Generate unique filename with timestamp and UUID

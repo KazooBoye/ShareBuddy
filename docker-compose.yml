@@ -51,12 +51,66 @@ services:
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      # Module 4: Moderation System
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MODERATION_SERVICE_URL=http://moderation-service:5002
     volumes:
       - backend-uploads:/app/uploads
+      - upload-temp:/app/uploads/temp
     networks:
       - sharebuddy-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis Service (Message Queue for Moderation)
+  redis:
+    image: redis:7-alpine
+    container_name: sharebuddy-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - sharebuddy-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Moderation Service (AI-powered content analysis)
+  moderation-service:
+    build:
+      context: ./moderation-service
+      dockerfile: Dockerfile
+    container_name: sharebuddy-moderation
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    environment:
+      - NODE_ENV=production
+      - PORT=5002
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - BACKEND_WEBHOOK_URL=http://backend:5001/api/webhooks/moderation
+      - BACKEND_WEBHOOK_SECRET=${MODERATION_WEBHOOK_SECRET:-default-webhook-secret-change-in-production}
+    volumes:
+      - backend-uploads:/app/uploads:ro
+      - upload-temp:/app/uploads/temp:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - sharebuddy-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5002/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -72,7 +126,7 @@ services:
     ports:
       - "3000:80"
     environment:
-      - REACT_APP_API_URL=http://localhost:5001/api
+      - REACT_APP_API_URL=http://localhost:5001
       - REACT_APP_APP_NAME=ShareBuddy
       - REACT_APP_VERSION=1.0.0
     depends_on:
@@ -90,6 +144,10 @@ services:
 # Volumes
 volumes:
   backend-uploads:
+    driver: local
+  upload-temp:
+    driver: local
+  redis-data:
     driver: local
 
 # Networks

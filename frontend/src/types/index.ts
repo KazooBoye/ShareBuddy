@@ -59,6 +59,12 @@ export interface Document {
     };
     canDownload: boolean;
   };
+  moderation?: {
+    jobId: string;
+    status: string;
+    score?: number;
+    flags?: string[];
+  };
 }
 
 // Rating related types

@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { userService } from '../../services/userService';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import ModerationStatusBadge from '../../components/ModerationStatusBadge';
 
 interface UserProfile {
   id: string;
@@ -68,6 +69,7 @@ const ProfilePage: React.FC = () => {
   const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
   const [userDocuments, setUserDocuments] = useState<UserDocument[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
 
   // Check if viewing own profile
   const isOwnProfile = currentUser?.id === profile?.id;
@@ -598,29 +600,55 @@ const ProfilePage: React.FC = () => {
         <Tab eventKey="documents" title="📚 Tài liệu">
           <Card>
             <Card.Header className="d-flex justify-content-between align-items-center">
-              <h6 className="mb-0">Tài liệu đã tải lên ({userDocuments.length})</h6>
-              {isOwnProfile ? (
-                <Button variant="primary" size="sm" onClick={() => navigate('/upload')}>
-                  <FaFileAlt className="me-1" />
-                  Tải lên mới
-                </Button>
+              <div className="d-flex gap-2 align-items-center">
+                {isOwnProfile && userDocuments.length > 0 && (
+                  <Form.Select 
+                    size="sm" 
+                    value={statusFilter} 
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    style={{ width: 'auto' }}
+                  >
+                    <option value="all">Tất cả</option>
+                    <option value="pending">Đang kiểm duyệt</option>
+                    <option value="approved">Đã duyệt</option>
+                    <option value="rejected">Bị từ chối</option>
+                  </Form.Select>
+                )}
+                {isOwnProfile && (
+                  <Button variant="primary" size="sm" onClick={() => navigate('/upload')}>
+                    <FaFileAlt className="me-1" />
+                    Tải lên mới
+                  </Button>
+                )}
+              </div>n>
               ) : null}
             </Card.Header>
             <Card.Body>
               {documentsLoading ? (
                 <div className="text-center py-4">
-                  <Spinner animation="border" variant="primary" size="sm" />
-                  <p className="mt-2 text-muted small">Đang tải tài liệu...</p>
-                </div>
-              ) : userDocuments.length === 0 ? (
-                <div className="text-center py-4">
-                  <FaFileAlt size={48} className="text-muted mb-3" />
-                  <p className="text-muted">Chưa có tài liệu nào</p>
-                  {isOwnProfile && (
-                    <Button variant="primary" size="sm" onClick={() => navigate('/upload')}>
-                      Tải lên tài liệu đầu tiên
-                    </Button>
-                  )}
+                  <Spinner ani
+                  .filter(doc => {
+                    if (!isOwnProfile) return doc.status === 'approved'; // Only show approved for others
+                    if (statusFilter === 'all') return true;
+                    return doc.status === statusFilter;
+                  })
+                  .map((doc) => (
+                  <Col md={6} lg={4} key={doc.id} className="mb-4">
+                    <Card className="h-100 border-0 shadow-sm">
+                      <Card.Body>
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <h6 className="mb-0 flex-grow-1">{doc.title}</h6>
+                          <div className="d-flex gap-1 flex-shrink-0 flex-wrap justify-content-end">
+                            {doc.isPremium && (
+                              <Badge bg="warning" className="ms-1">Premium</Badge>
+                            )}
+                            {isOwnProfile && doc.status && (
+                              <div className="ms-1">
+                                <ModerationStatusBadge 
+                                  status={doc.status as 'pending' | 'approved' | 'rejected'} 
+                                  size="sm"
+                                />
+                              </div
                 </div>
               ) : (
                 <Row>
