@@ -201,20 +201,18 @@ const getMe = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        user: {
-          id: user.user_id,
-          email: user.email,
-          username: user.username,
-          fullName: user.full_name,
-          bio: user.bio,
-          university: user.university,
-          major: user.major,
-          role: user.role,
-          credits: user.credits,
-          isVerifiedAuthor: user.is_verified_author,
-          avatarUrl: user.avatar_url,
-          createdAt: user.created_at
-        }
+        id: user.user_id,
+        email: user.email,
+        username: user.username,
+        fullName: user.full_name,
+        bio: user.bio,
+        university: user.university,
+        major: user.major,
+        role: user.role,
+        credits: parseInt(user.credits) || 0,
+        isVerifiedAuthor: user.is_verified_author,
+        avatarUrl: user.avatar_url,
+        createdAt: user.created_at
       }
     });
   } catch (error) {

@@ -52,25 +52,23 @@ const getProfile = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        user: {
-          id: user.user_id,
-          username: user.username,
-          fullName: user.full_name,
-          bio: user.bio,
-          university: user.university,
-          major: user.major,
-          credits: user.credits,
-          isVerifiedAuthor: user.is_verified_author,
-          avatarUrl: user.avatar_url,
-          createdAt: user.created_at,
-          stats: {
-            documentCount: parseInt(user.document_count),
-            followingCount: parseInt(user.following_count),
-            followerCount: parseInt(user.follower_count),
-            avgRating: user.avg_rating ? parseFloat(user.avg_rating).toFixed(1) : null
-          },
-          isFollowing
-        }
+        id: user.user_id,
+        username: user.username,
+        fullName: user.full_name,
+        bio: user.bio,
+        university: user.university,
+        major: user.major,
+        credits: parseInt(user.credits) || 0,
+        isVerifiedAuthor: user.is_verified_author,
+        avatarUrl: user.avatar_url,
+        createdAt: user.created_at,
+        stats: {
+          documentCount: parseInt(user.document_count),
+          followingCount: parseInt(user.following_count),
+          followerCount: parseInt(user.follower_count),
+          avgRating: user.avg_rating ? parseFloat(user.avg_rating).toFixed(1) : null
+        },
+        isFollowing
       }
     });
   } catch (error) {
@@ -365,21 +363,31 @@ const getUserDocuments = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
     const offset = (page - 1) * limit;
-    const status = req.query.status || 'approved';
+    const status = req.query.status;
 
-    // Only show approved documents to others, all statuses to self
-    let statusCondition = 'AND d.status = $4';
-    let queryParams = [id, limit, offset, status];
+    // If viewing own profile, show ALL documents by default (pending, approved, rejected)
+    // If viewing others' profile, show only approved documents
+    const isOwnProfile = req.user && req.user.user_id === id;
     
-    if (req.user && req.user.user_id === parseInt(id)) {
-      if (status === 'all') {
-        statusCondition = '';
-        queryParams = [id, limit, offset];
-      }
-    } else {
+    console.log('📄 getUserDocuments - User:', req.user?.user_id, 'Profile:', id, 'IsOwn:', isOwnProfile);
+    
+    let statusCondition = '';
+    let queryParams = [id, limit, offset];
+    
+    if (!isOwnProfile) {
       // Non-owners can only see approved documents
-      queryParams[3] = 'approved';
+      console.log('👤 Not own profile - filtering approved only');
+      statusCondition = 'AND d.status = $4';
+      queryParams.push('approved');
+    } else if (status) {
+      // Owner can filter by specific status if provided
+      console.log('✅ Own profile with status filter:', status);
+      statusCondition = 'AND d.status = $4';
+      queryParams.push(status);
+    } else {
+      console.log('✅ Own profile - showing ALL documents');
     }
+    // else: owner viewing all statuses (no filter)
 
     const result = await query(
       `SELECT d.document_id, d.title, d.description, d.file_path, d.file_name,
@@ -396,12 +404,15 @@ const getUserDocuments = async (req, res, next) => {
       queryParams
     );
 
-    // Get total count
-    const countQuery = statusCondition 
-      ? `SELECT COUNT(*) as total FROM documents WHERE author_id = $1 AND status = $2`
-      : `SELECT COUNT(*) as total FROM documents WHERE author_id = $1`;
+    // Get total count with same status filter
+    let countQuery = `SELECT COUNT(*) as total FROM documents WHERE author_id = $1`;
+    let countParams = [id];
     
-    const countParams = statusCondition ? [id, queryParams[3]] : [id];
+    if (statusCondition) {
+      countQuery += ` AND status = $2`;
+      countParams.push(queryParams[3]); // The status parameter
+    }
+    
     const countResult = await query(countQuery, countParams);
 
     const total = parseInt(countResult.rows[0].total);

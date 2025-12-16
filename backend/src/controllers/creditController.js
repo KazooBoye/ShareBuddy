@@ -84,13 +84,13 @@ const getTransactionHistory = async (req, res, next) => {
     const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
 
-    // Calculate summary statistics
+    // Calculate summary statistics based on amount (positive = earned, negative = spent)
     const statsResult = await query(
       `SELECT 
          SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as total_earned,
          SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as total_spent,
-         COUNT(CASE WHEN transaction_type = 'earn' THEN 1 END) as earn_count,
-         COUNT(CASE WHEN transaction_type = 'download' THEN 1 END) as spend_count
+         COUNT(CASE WHEN amount > 0 THEN 1 END) as earn_count,
+         COUNT(CASE WHEN amount < 0 THEN 1 END) as spend_count
        FROM credit_transactions
        WHERE user_id = $1`,
       [userId]

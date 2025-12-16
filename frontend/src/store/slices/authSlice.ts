@@ -82,8 +82,8 @@ export const getCurrentUser = createAsyncThunk(
       
       console.log('🔄 Fetching user data from server...');
       const response = await authService.getProfile();
-      // Backend returns data.user, so we need to extract the user object
-      return (response.data as any)?.user || response.data;
+      // Backend now returns data directly without nested user object
+      return response.data;
     } catch (error: any) {
       // If token is invalid, clear storage
       tokenService.clearAll();

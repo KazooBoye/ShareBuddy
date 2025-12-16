@@ -175,7 +175,7 @@ const UploadPage: React.FC = () => {
               {uploadStatus === 'success' && (
                 <Alert variant="success" className="d-flex align-items-center">
                   <FaCheckCircle className="me-2" />
-                  Tài liệu đã được tải lên thành công! Đang chờ phê duyệt.
+                  Tài liệu đã được tải lên thành công và đã có sẵn để tải xuống!
                 </Alert>
               )}
 
@@ -279,7 +279,7 @@ const UploadPage: React.FC = () => {
                   </Col>
                   <Col md={6}>
                     <Form.Group className="mb-3">
-                      <Form.Label>Chi phí credits</Form.Label>
+                      <Form.Label>Chi phí tải xuống</Form.Label>
                       <Form.Select
                         name="creditCost"
                         value={formData.creditCost}
@@ -295,6 +295,12 @@ const UploadPage: React.FC = () => {
                     </Form.Group>
                   </Col>
                 </Row>
+
+                {/* Credit Reward Notification */}
+                <Alert variant="success" className="d-flex align-items-center mb-3">
+                  <FaCheckCircle className="me-2" />
+                  <span>💰 Bạn sẽ nhận được 1 credit với mỗi tài liệu tải lên!</span>
+                </Alert>
 
                 <Form.Group className="mb-3">
                   <Form.Label>Mô tả *</Form.Label>

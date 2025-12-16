@@ -45,6 +45,7 @@ interface UserDocument {
   uploadDate: string;
   creditCost: number;
   isPremium: boolean;
+  status?: string;
 }
 
 const ProfilePage: React.FC = () => {
@@ -141,8 +142,8 @@ const ProfilePage: React.FC = () => {
   // Load documents when switching to documents tab
   useEffect(() => {
     const loadDocuments = async () => {
-      // Only load if we have a valid profile ID
-      if (activeTab === 'documents' && profile?.id && profile.id !== 'undefined' && userDocuments.length === 0) {
+      // Always reload documents when switching to documents tab to get latest data
+      if (activeTab === 'documents' && profile?.id && profile.id !== 'undefined') {
         try {
           setDocumentsLoading(true);
           console.log('📄 Loading documents for user:', profile.id);
@@ -159,8 +160,18 @@ const ProfilePage: React.FC = () => {
               rating: doc.avgRating ? parseFloat(doc.avgRating) : 0,
               uploadDate: doc.createdAt,
               creditCost: doc.creditCost || 0,
-              isPremium: doc.isPremium || false
+              isPremium: doc.isPremium || false,
+              status: doc.status || 'pending'
             })));
+
+            // Update document count in profile stats
+            setProfile(prev => prev ? {
+              ...prev,
+              stats: {
+                ...prev.stats,
+                documentsUploaded: docs.length
+              }
+            } : null);
           }
         } catch (err) {
           console.error('❌ Error loading documents:', err);
@@ -171,7 +182,7 @@ const ProfilePage: React.FC = () => {
     };
 
     loadDocuments();
-  }, [activeTab, profile?.id, userDocuments.length]);
+  }, [activeTab, profile?.id]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -618,10 +629,15 @@ const ProfilePage: React.FC = () => {
                     <Card className="h-100 border-0 shadow-sm">
                       <Card.Body>
                         <div className="d-flex justify-content-between align-items-start mb-2">
-                          <h6 className="mb-0">{doc.title}</h6>
-                          {doc.isPremium && (
-                            <Badge bg="warning">Premium</Badge>
-                          )}
+                          <h6 className="mb-0 flex-grow-1">{doc.title}</h6>
+                          <div className="d-flex gap-1 flex-shrink-0">
+                            {doc.isPremium && (
+                              <Badge bg="warning" className="ms-1">Premium</Badge>
+                            )}
+                            {isOwnProfile && doc.status === 'rejected' && (
+                              <Badge bg="danger" className="ms-1">Bị từ chối</Badge>
+                            )}
+                          </div>
                         </div>
                         <p className="text-muted small mb-2">{doc.subject}</p>
                         <div className="d-flex justify-content-between text-muted small">
@@ -641,21 +657,6 @@ const ProfilePage: React.FC = () => {
                 ))}
               </Row>
               )}
-            </Card.Body>
-          </Card>
-        </Tab>
-
-        <Tab eventKey="activity" title="📈 Hoạt động">
-          <Card>
-            <Card.Header>
-              <h6 className="mb-0">Hoạt động gần đây</h6>
-            </Card.Header>
-            <Card.Body>
-              <div className="text-center py-4">
-                <FaFileAlt size={48} className="text-muted mb-3" />
-                <p className="text-muted">Chưa có hoạt động nào được ghi nhận</p>
-                <small className="text-muted">Hoạt động sẽ hiển thị khi bạn tải lên tài liệu hoặc tương tác với cộng đồng</small>
-              </div>
             </Card.Body>
           </Card>
         </Tab>
