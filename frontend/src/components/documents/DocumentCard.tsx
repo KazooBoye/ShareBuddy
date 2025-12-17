@@ -125,98 +125,103 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
 
   return (
     <Card 
-      className={`document-card card-hover h-100 ${compact ? 'card-compact' : ''} ${className || ''}`}
+      className={`document-card ${compact ? 'card-compact' : ''} ${className || ''}`}
       as={Link}
       to={`/documents/${doc.id}`}
     >
       {/* Document Thumbnail */}
-      {doc.thumbnailUrl && (
-        <div className="card-img-wrapper">
+      <div className="card-img-wrapper" style={{ height: compact ? '140px' : '200px' }}>
+        {doc.thumbnailUrl ? (
           <Card.Img 
             variant="top"
             src={doc.thumbnailUrl}
             alt={doc.title}
-            style={{ height: compact ? '120px' : '180px', objectFit: 'cover' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
-        </div>
-      )}
+        ) : (
+          <div 
+            className="d-flex align-items-center justify-content-center h-100"
+            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+          >
+            <i className="bi bi-file-earmark-text text-white" style={{ fontSize: '3rem' }} />
+          </div>
+        )}
+      </div>
       
       <Card.Body className="d-flex flex-column">
-        {/* Title and Description */}
-        <div className="flex-grow-1">
-          <Card.Title className={`${compact ? 'h6' : 'h5'} mb-2 text-truncate`}>
-            {doc.title}
-          </Card.Title>
-          
+        {/* Title */}
+        <Card.Title className={`${compact ? 'h6' : 'h5'} mb-2`}>
+          {doc.title}
+        </Card.Title>
+        
+        {/* Description */}
+        {doc.description && (
           <Card.Text 
-            className={`text-muted ${compact ? 'small' : ''}`}
+            className={`text-muted mb-3 ${compact ? 'small' : ''}`}
             style={{
               display: '-webkit-box',
-              WebkitLineClamp: compact ? 2 : 3,
+              WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              fontSize: '0.875rem',
+              lineHeight: '1.5'
             }}
           >
             {doc.description}
           </Card.Text>
-        </div>
+        )}
 
-        {/* Category and Subject Badges */}
-        <div className="mb-2">
-          <Badge bg="primary" className="me-2">
-            📚 {doc.category}
-          </Badge>
-          <Badge bg="secondary">
-            📖 {doc.subject}
-          </Badge>
-        </div>
+        {/* Subject Badge */}
+        {doc.subject && (
+          <div className="mb-3">
+            <Badge bg="secondary" className="me-2">
+              <i className="bi bi-book me-1" />
+              {doc.subject}
+            </Badge>
+          </div>
+        )}
 
         {/* Author Info */}
         {showAuthor && doc.author && (
-          <div className="d-flex align-items-center mb-2">
+          <div className="d-flex align-items-center mb-2 pb-2 border-bottom">
             <img
               src={doc.author.avatarUrl || '/default-avatar.png'}
               alt="Author"
               className="user-avatar-sm rounded-circle me-2"
-              style={{ width: '24px', height: '24px' }}
+              style={{ width: '32px', height: '32px', objectFit: 'cover' }}
             />
-            <div>
-              <small className="text-muted d-flex align-items-center">
-                {doc.author.fullName || doc.author.username}
-                {doc.author.isVerifiedAuthor && (
-                  <i className="bi bi-patch-check-fill text-primary ms-1" />
-                )}
-              </small>
-              {doc.author.university && (
-                <small className="text-muted d-block" style={{ fontSize: '0.75rem' }}>
-                  {doc.author.university}
+            <div className="flex-grow-1" style={{ minWidth: 0 }}>
+              <div className="d-flex align-items-center">
+                <small className="text-muted fw-medium text-truncate" style={{ fontSize: '0.8125rem' }}>
+                  {doc.author.fullName || doc.author.username}
                 </small>
-              )}
+                {doc.author.isVerifiedAuthor && (
+                  <i className="bi bi-patch-check-fill text-primary ms-1 flex-shrink-0" />
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Rating */}
-        <div className="mb-2">
-          {renderRating()}
+        {/* Stats Row */}
+        <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+          <div className="d-flex align-items-center">
+            {renderRating()}
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <small className="text-muted d-flex align-items-center">
+              <i className="bi bi-download me-1" />
+              {doc.downloadCount || 0}
+            </small>
+            <Badge bg="success" pill>
+              {doc.creditCost} <i className="bi bi-coin" />
+            </Badge>
+          </div>
         </div>
 
         {/* Footer Actions */}
-        <Row className="align-items-center mt-auto">
-          <Col xs={6}>
-            <div className="d-flex align-items-center">
-              <Badge bg="success" className="me-2">
-                {doc.creditCost} credits
-              </Badge>
-              <small className="text-muted">
-                <i className="bi bi-download me-1" />
-                {doc.downloadCount || 0}
-              </small>
-            </div>
-          </Col>
-          
-          <Col xs={6} className="text-end">
-            <div className="btn-group" role="group">
+        <div className="d-flex justify-content-end gap-2 mt-auto">
+          <div className="btn-group" role="group">
               {/* Bookmark Button */}
               <OverlayTrigger
                 placement="top"
@@ -252,8 +257,7 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
                 </Button>
               </OverlayTrigger>
             </div>
-          </Col>
-        </Row>
+        </div>
       </Card.Body>
     </Card>
   );

@@ -39,10 +39,6 @@ const QuestionList: React.FC<QuestionListProps> = ({ documentId }) => {
   const [submitting, setSubmitting] = useState(false);
   const { isAuthenticated, token } = useAuth();
 
-  useEffect(() => {
-    fetchQuestions();
-  }, [documentId, sortBy]);
-
   const fetchQuestions = async () => {
     try {
       setLoading(true);
@@ -56,6 +52,10 @@ const QuestionList: React.FC<QuestionListProps> = ({ documentId }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchQuestions();
+  }, [documentId, sortBy, fetchQuestions]);
 
   const handleSubmitQuestion = async (e: React.FormEvent) => {
     e.preventDefault();

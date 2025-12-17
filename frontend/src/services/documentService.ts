@@ -5,7 +5,8 @@
 import { apiRequest, uploadFile } from './api';
 import { 
   ApiResponse, 
-  Document, 
+  Document,
+  DocumentUploadResponse,
   DocumentUploadForm, 
   DocumentSearchParams,
   PaginatedResponse 
@@ -40,7 +41,7 @@ export const documentService = {
     data: DocumentUploadForm, 
     file: File,
     onProgress?: (progress: number) => void
-  ): Promise<ApiResponse<Document>> => {
+  ): Promise<ApiResponse<DocumentUploadResponse>> => {
     return uploadFile('documents/upload', file, data, onProgress);
   },
 
@@ -152,15 +153,5 @@ export const documentService = {
       reason,
       description
     });
-  },
-
-  // Get document categories
-  getCategories: async (): Promise<ApiResponse<string[]>> => {
-    return apiRequest('GET', 'documents/categories');
-  },
-
-  // Get subjects by category
-  getSubjectsByCategory: async (category: string): Promise<ApiResponse<string[]>> => {
-    return apiRequest('GET', `documents/categories/${category}/subjects`);
   }
 };

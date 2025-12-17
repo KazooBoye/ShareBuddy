@@ -2,6 +2,105 @@
 
 All notable changes to ShareBuddy project will be documented in this file.
 
+## [1.6.2] - 2025-12-17
+
+### 🎯 Architecture Simplification
+
+#### Removed Temp Folder - Direct Upload to Permanent Storage
+- **Simplified**: Upload flow no longer uses temporary folder
+  - Files now saved directly to `/uploads/documents/` instead of `/uploads/temp/`
+  - Removed unnecessary file moving logic from webhook handler
+  - Moderation service doesn't require temp folder for processing
+  
+- **Changed Files**:
+  - [backend/src/middleware/upload.js](backend/src/middleware/upload.js)
+    * Changed destination from `tempDir` to `documentsDir`
+    * Updated storage comments to reflect permanent path
+  - [backend/src/controllers/documentController.js](backend/src/controllers/documentController.js)
+    * Changed fileUrl from `/uploads/temp/` to `/uploads/documents/`
+  - [backend/src/controllers/webhookController.js](backend/src/controllers/webhookController.js)
+    * Removed `moveFileToPermanentStorage()` function (no longer needed)
+    * Updated `deleteDocumentFile()` to use documents folder
+    * Removed file moving logic from approval flow
+    * Credits awarded immediately after approval (file already in correct location)
+
+- **Workflow Now**:
+  ```
+  1. Upload → File saved to uploads/documents/ immediately
+  2. Document status = 'pending'
+  3. Moderation queue processes document
+  4. Webhook receives result:
+     - APPROVED: Award credit (file already in place)
+     - REJECTED: Delete file from documents folder
+  ```
+
+- **Benefits**:
+  - ✅ Simpler code - fewer moving parts
+  - ✅ Faster approval - no file moving delay
+  - ✅ Less error-prone - no file move failures
+  - ✅ Cleaner architecture - single source of truth for file location
+
+## [1.6.1] - 2025-12-17
+
+### 🔧 Bug Fixes & Improvements
+
+#### Backend: Restored Moderation Workflow
+- **Fixed**: Document upload now correctly uses pending status and moderation queue
+  - Changed status from 'approved' to 'pending' on upload
+  - Creates moderation_jobs record with status='queued'
+  - Pushes job to Redis queue using Bull
+  - **Credit award moved**: Credits now awarded ONLY after AI approval (via webhook)
+  - File: [backend/src/controllers/documentController.js](backend/src/controllers/documentController.js)
+
+#### Frontend: Fixed TypeScript Errors
+- **Added**: `DocumentUploadResponse` interface for proper type safety
+  - Defines structure: `document` object with nested properties
+  - Includes optional `moderation` object with jobId and status
+  - File: [frontend/src/types/index.ts](frontend/src/types/index.ts)
+- **Updated**: `uploadDocument` service to use correct return type
+  - Changed from `ApiResponse<Document>` to `ApiResponse<DocumentUploadResponse>`
+  - File: [frontend/src/services/documentService.ts](frontend/src/services/documentService.ts)
+
+#### CSS: Browser Compatibility
+- **Added**: Standard `line-clamp` property alongside `-webkit-line-clamp`
+  - Fixes CSS validation warnings
+  - Improves compatibility with modern browsers
+  - Applied to: `.card-title`, `.text-truncate-2`, `.text-truncate-3`
+  - File: [frontend/src/styles/components.css](frontend/src/styles/components.css)
+
+#### Complete Upload → Approval Workflow
+```
+1. User uploads document → status='pending', file in uploads/temp
+2. Backend creates moderation_jobs record (status='queued')
+3. Job pushed to Redis queue (Bull)
+4. AI service picks up job, analyzes content
+5. AI sends webhook callback with score
+6. Webhook handler (backend/src/controllers/webhookController.js):
+   - If score > 0.5 (APPROVED):
+     * Move file: uploads/temp → uploads/documents
+     * Award 1 credit to user
+     * Update status to 'approved'
+   - If score ≤ 0.5 (REJECTED):
+     * Delete temp file
+     * Update status to 'rejected'
+     * No credit awarded
+7. Frontend shows final status in user profile
+```
+
+### 📝 Files Modified
+- `backend/src/controllers/documentController.js` - Restored moderation workflow
+- `frontend/src/types/index.ts` - Added DocumentUploadResponse interface
+- `frontend/src/services/documentService.ts` - Updated uploadDocument return type
+- `frontend/src/styles/components.css` - Added standard line-clamp property
+
+### ✅ Verification
+- All TypeScript compilation errors resolved
+- All CSS validation warnings resolved
+- Moderation workflow matches system specification
+- Credit system aligned with approval process
+
+---
+
 ## [1.6.0] - 2025-12-15
 
 ### ✨ Module 9: AI-Powered Automated Moderation System
