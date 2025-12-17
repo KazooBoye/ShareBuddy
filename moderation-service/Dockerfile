@@ -1,15 +1,13 @@
 # Moderation Service Dockerfile
-FROM node:18-alpine
+FROM node:18-slim
 
 # Install system dependencies for TensorFlow.js
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    giflib-dev
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
