@@ -2,7 +2,7 @@
  * AI Models - TensorFlow.js toxicity detection
  */
 
-const tf = require('@tensorflow/tfjs-node');
+const tf = require('@tensorflow/tfjs');
 const toxicity = require('@tensorflow-models/toxicity');
 const logger = require('../utils/logger');
 

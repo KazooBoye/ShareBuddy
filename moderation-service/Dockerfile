@@ -1,15 +1,9 @@
 # Moderation Service Dockerfile
 FROM node:18-slim
 
-# Install system dependencies for TensorFlow.js
+# Install minimal system dependencies
 RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
     wget \
-    libc6 \
-    libgcc1 \
-    libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
