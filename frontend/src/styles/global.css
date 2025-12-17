@@ -351,3 +351,57 @@ body {
   border-color: var(--bs-primary);
   background-color: rgba(99, 102, 241, 0.1);
 }
+
+/* ==================== Responsive Container ==================== */
+@media (max-width: 576px) {
+  .container,
+  .container-sm {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* ==================== Responsive Tables ==================== */
+@media (max-width: 768px) {
+  .table-responsive {
+    font-size: 0.875rem;
+  }
+}
+
+/* ==================== Responsive Forms ==================== */
+@media (max-width: 576px) {
+  .form-control,
+  .form-select,
+  .btn {
+    font-size: 1rem; /* Prevent iOS zoom on focus */
+  }
+  
+  .input-group-lg .form-control {
+    font-size: 1.125rem;
+  }
+}
+
+/* ==================== Responsive Spacing ==================== */
+@media (max-width: 768px) {
+  .py-5 {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+  }
+  
+  .my-5 {
+    margin-top: 2rem !important;
+    margin-bottom: 2rem !important;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

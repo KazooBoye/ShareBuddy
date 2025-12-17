@@ -12,8 +12,7 @@ import {
   Button, 
   Badge, 
   Spinner,
-  InputGroup,
-  Accordion 
+  InputGroup
 } from 'react-bootstrap';
 import axios from 'axios';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -23,7 +22,6 @@ interface SearchResult {
   document_id: string;
   title: string;
   description: string;
-  category: string;
   subject: string;
   university: string;
   file_type: string;
@@ -37,7 +35,6 @@ interface SearchResult {
 }
 
 interface SearchFilters {
-  category?: string;
   subject?: string;
   university?: string;
   minRating?: number;
@@ -63,9 +60,11 @@ const SearchPage: React.FC = () => {
 
   useEffect(() => {
     if (queryParam) {
+      setQuery(queryParam);
       performSearch(queryParam);
     }
-  }, [queryParam]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount - intentionally ignoring performSearch and queryParam
 
   useEffect(() => {
     if (query.length >= 2) {
@@ -141,12 +140,15 @@ const SearchPage: React.FC = () => {
   };
 
   return (
-    <Container className="py-4" style={{ marginTop: '80px', maxWidth: '1200px' }}>
+    <Container className="py-3 py-md-4" style={{ marginTop: '70px', maxWidth: '1400px' }}>
       {/* Search Bar */}
-      <Row className="mb-4">
+      <Row className="mb-3 mb-md-4">
         <Col>
           <Form onSubmit={handleSearch}>
-            <InputGroup size="lg">
+            <InputGroup size="lg" className="shadow-sm">
+              <InputGroup.Text>
+                <FiSearch />
+              </InputGroup.Text>
               <Form.Control
                 type="text"
                 placeholder="Search documents, courses, topics..."
@@ -209,17 +211,13 @@ const SearchPage: React.FC = () => {
 
               <Col md={3}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Category</Form.Label>
-                  <Form.Select
-                    value={filters.category || ''}
-                    onChange={(e) => handleFilterChange('category', e.target.value || undefined)}
-                  >
-                    <option value="">All Categories</option>
-                    <option value="Lecture Notes">Lecture Notes</option>
-                    <option value="Assignments">Assignments</option>
-                    <option value="Exams">Exams</option>
-                    <option value="Projects">Projects</option>
-                  </Form.Select>
+                  <Form.Label>Subject</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="e.g. Algebra, Biology"
+                    value={filters.subject || ''}
+                    onChange={(e) => handleFilterChange('subject', e.target.value || undefined)}
+                  />
                 </Form.Group>
               </Col>
 
@@ -334,7 +332,6 @@ const SearchPage: React.FC = () => {
                               </Link>
                               <p className="text-muted mb-2">{doc.description}</p>
                               <div className="d-flex gap-2 flex-wrap">
-                                <Badge bg="secondary">{doc.category}</Badge>
                                 <Badge bg="info">{doc.subject}</Badge>
                                 <Badge bg="light" text="dark">{doc.university}</Badge>
                                 <Badge bg="primary">{doc.file_type.toUpperCase()}</Badge>

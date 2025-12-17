@@ -126,7 +126,7 @@ const UploadPage: React.FC = () => {
       );
       
       // Check if document is pending moderation
-      const documentStatus = response.data?.status || 'approved';
+      const documentStatus = response.data?.document?.status || 'pending';
       const moderation = response.data?.moderation;
       
       if (documentStatus === 'pending') {

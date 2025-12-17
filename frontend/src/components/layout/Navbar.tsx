@@ -25,20 +25,21 @@ const Navbar: React.FC = () => {
 
   return (
     <BSNavbar bg="dark" variant="dark" expand="lg" fixed="top" className="shadow-sm">
-      <Container fluid>
-        {/* Sidebar toggle button */}
+      <Container fluid className="px-3 px-md-4">
+        {/* Sidebar toggle button - only on desktop */}
         <Button
           variant="outline-light"
           size="sm"
           onClick={() => dispatch(toggleSidebar())}
-          className="me-3"
+          className="me-2 me-md-3 d-none d-lg-block"
         >
           <i className="bi bi-list"></i>
         </Button>
 
         {/* Brand */}
         <BSNavbar.Brand as={Link} to="/" className="fw-bold text-gradient-purple">
-          📚 ShareBuddy
+          <span className="d-none d-sm-inline">📚 ShareBuddy</span>
+          <span className="d-inline d-sm-none">📚 SB</span>
         </BSNavbar.Brand>
 
         <BSNavbar.Toggle aria-controls="basic-navbar-nav" />
@@ -49,38 +50,41 @@ const Navbar: React.FC = () => {
             <Nav.Link as={Link} to="/documents">Tài liệu</Nav.Link>
           </Nav>
 
-          <Nav className="align-items-center">
+          <Nav className="align-items-lg-center">
             {/* Theme toggle */}
             <Button
               variant="outline-light"
               size="sm"
               onClick={() => dispatch(toggleTheme())}
-              className="me-2"
+              className="me-2 mb-2 mb-lg-0"
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </Button>
 
             {isAuthenticated ? (
               <>
-                <Nav.Link as={Link} to="/upload" className="me-2">
+                <Nav.Link as={Link} to="/upload" className="mb-2 mb-lg-0">
                   Tải lên
                 </Nav.Link>
-                <Nav.Link as={Link} to="/dashboard" className="me-2">
+                <Nav.Link as={Link} to="/dashboard" className="mb-2 mb-lg-0">
                   Dashboard
                 </Nav.Link>
-                <div className="d-flex align-items-center">
-                  <img
-                    src={user?.avatarUrl || DEFAULT_AVATAR}
-                    alt="Avatar"
-                    className="user-avatar me-2"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null; // Prevent infinite loop
-                      e.currentTarget.src = DEFAULT_AVATAR;
-                    }}
-                  />
-                  <span className="me-2 text-light d-none d-md-inline">
-                    {user?.username}
-                  </span>
+                <div className="d-flex align-items-center flex-wrap gap-2">
+                  <div className="d-flex align-items-center">
+                    <img
+                      src={user?.avatarUrl || DEFAULT_AVATAR}
+                      alt="Avatar"
+                      className="user-avatar me-2"
+                      style={{ width: '32px', height: '32px', borderRadius: '50%' }}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = DEFAULT_AVATAR;
+                      }}
+                    />
+                    <span className="me-2 text-light">
+                      {user?.username}
+                    </span>
+                  </div>
                   <Button
                     variant="outline-light"
                     size="sm"
@@ -92,7 +96,7 @@ const Navbar: React.FC = () => {
               </>
             ) : (
               <>
-                <Nav.Link as={Link} to="/login" className="me-2">
+                <Nav.Link as={Link} to="/login" className="mb-2 mb-lg-0">
                   Đăng nhập
                 </Nav.Link>
                 <Link

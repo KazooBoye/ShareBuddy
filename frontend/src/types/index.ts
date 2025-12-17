@@ -192,6 +192,27 @@ export interface Pagination {
   hasPrevPage: boolean;
 }
 
+// Document upload response types
+export interface DocumentUploadResponse {
+  document: {
+    id: string;
+    title: string;
+    description: string;
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    subject: string;
+    university?: string;
+    creditCost: number;
+    status: 'pending' | 'approved' | 'rejected';
+    createdAt: string;
+  };
+  moderation?: {
+    jobId: string;
+    status: string;
+  } | null;
+}
+
 // API Response types
 export interface ApiResponse<T = any> {
   success: boolean;

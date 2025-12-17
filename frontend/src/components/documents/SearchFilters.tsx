@@ -1,12 +1,12 @@
 /**
  * SearchFilters Component - Bộ lọc tìm kiếm nâng cao
- * Features: Category, subject, rating, credit cost filters
+ * Features: subject, rating, credit cost filters
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Row, Col, Form, Button, Badge } from 'react-bootstrap';
 import { DocumentSearchParams } from '../../types';
-import { documentService } from '../../services/documentService';
+import debounce from 'lodash/debounce';
 
 interface SearchFiltersProps {
   onFilterChange: (filters: Partial<DocumentSearchParams>) => void;
@@ -20,52 +20,36 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
   compact = false
 }) => {
   const [filters, setFilters] = useState<DocumentSearchParams>(initialFilters);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [subjects, setSubjects] = useState<string[]>([]);
+  const [localSearch, setLocalSearch] = useState(initialFilters.search || '');
+  const [localSubject, setLocalSubject] = useState(initialFilters.subject || '');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Load categories and subjects
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const categoriesResponse = await documentService.getCategories();
-        setCategories(categoriesResponse.data || []);
-      } catch (error) {
-        console.error('Failed to load categories:', error);
-      }
-    };
-    
-    loadData();
-  }, []);
-
-  // Load subjects when category changes
-  useEffect(() => {
-    if (filters.category) {
-      const loadSubjects = async () => {
-        try {
-          const subjectsResponse = await documentService.getSubjectsByCategory(filters.category!);
-          setSubjects(subjectsResponse.data || []);
-        } catch (error) {
-          console.error('Failed to load subjects:', error);
-        }
-      };
-      
-      loadSubjects();
-    } else {
-      setSubjects([]);
-    }
-  }, [filters.category]);
+  // Debounced filter change using lodash
+  const debouncedFilterChange = useMemo(
+    () =>
+      debounce((key: keyof DocumentSearchParams, value: any) => {
+        setFilters((prevFilters) => {
+          const newFilters = { ...prevFilters, [key]: value };
+          onFilterChange(newFilters);
+          return newFilters;
+        });
+      }, 500),
+    [onFilterChange]
+  );
 
   const handleFilterChange = (key: keyof DocumentSearchParams, value: any) => {
     const newFilters = { ...filters, [key]: value };
-    
-    // Reset subject when category changes
-    if (key === 'category') {
-      newFilters.subject = undefined;
-    }
-    
     setFilters(newFilters);
     onFilterChange(newFilters);
+  };
+
+  const handleTextInputChange = (key: keyof DocumentSearchParams, value: string) => {
+    if (key === 'search') {
+      setLocalSearch(value);
+    } else if (key === 'subject') {
+      setLocalSubject(value);
+    }
+    debouncedFilterChange(key, value || undefined);
   };
 
   const clearFilters = () => {
@@ -79,59 +63,38 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.category || filters.subject || filters.minRating || filters.maxCreditCost || filters.tags?.length);
+    return !!(filters.subject || filters.minRating || filters.maxCreditCost || filters.tags?.length);
   };
 
   return (
     <div className="search-filters">
-      <Row className="align-items-end">
+      <Row className="g-3">
         {/* Search Input */}
-        <Col md={compact ? 12 : 4} className="mb-3">
+        <Col xs={12} md={compact ? 12 : 6}>
           <Form.Label>Tìm kiếm</Form.Label>
           <Form.Control
             type="text"
             placeholder="Tìm tài liệu..."
-            value={filters.search || ''}
-            onChange={(e) => handleFilterChange('search', e.target.value)}
+            value={localSearch}
+            onChange={(e) => handleTextInputChange('search', e.target.value)}
           />
         </Col>
 
-        {/* Category Filter */}
-        <Col md={compact ? 6 : 3} className="mb-3">
-          <Form.Label>Danh mục</Form.Label>
-          <Form.Select
-            value={filters.category || ''}
-            onChange={(e) => handleFilterChange('category', e.target.value || undefined)}
-          >
-            <option value="">Tất cả danh mục</option>
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </Form.Select>
-        </Col>
-
         {/* Subject Filter */}
-        <Col md={compact ? 6 : 3} className="mb-3">
+        <Col xs={12} sm={6} md={compact ? 6 : 4}>
           <Form.Label>Môn học</Form.Label>
-          <Form.Select
-            value={filters.subject || ''}
-            onChange={(e) => handleFilterChange('subject', e.target.value || undefined)}
-            disabled={!filters.category}
-          >
-            <option value="">Tất cả môn học</option>
-            {subjects.map((subject) => (
-              <option key={subject} value={subject}>
-                {subject}
-              </option>
-            ))}
-          </Form.Select>
+          <Form.Control
+            type="text"
+            placeholder="VD: Toán, Vật lý..."
+            value={localSubject}
+            onChange={(e) => handleTextInputChange('subject', e.target.value)}
+          />
         </Col>
 
         {/* Action Buttons */}
-        <Col md={compact ? 12 : 2} className="mb-3">
-          <div className="d-flex gap-2">
+        <Col xs={12} sm={6} md={compact ? 12 : 2}>
+          <Form.Label className="d-none d-md-block">&nbsp;</Form.Label>
+          <div className="d-flex gap-2 flex-wrap">
             <Button
               variant="outline-secondary"
               size="sm"
@@ -223,20 +186,6 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
           <Col>
             <div className="d-flex flex-wrap align-items-center">
               <small className="text-muted me-2">Bộ lọc đang áp dụng:</small>
-              
-              {filters.category && (
-                <Badge bg="primary" className="me-1 mb-1">
-                  Danh mục: {filters.category}
-                  <Button
-                    variant="link"
-                    size="sm"
-                    className="p-0 ms-1 text-white"
-                    onClick={() => handleFilterChange('category', undefined)}
-                  >
-                    <i className="bi bi-x" />
-                  </Button>
-                </Badge>
-              )}
               
               {filters.subject && (
                 <Badge bg="info" className="me-1 mb-1">

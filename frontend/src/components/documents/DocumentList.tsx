@@ -294,24 +294,16 @@ const DocumentList: React.FC<DocumentListProps> = ({
       ) : (
         <>
           {viewMode === 'grid' ? (
-            <Row className="document-grid">
+            <div className="document-grid">
               {displayDocuments.map((document) => (
-                <Col 
-                  key={document.id} 
-                  xs={12} 
-                  sm={6} 
-                  lg={compact ? 6 : 4} 
-                  xl={compact ? 4 : 3}
-                  className="mb-4"
-                >
-                  <DocumentCard 
-                    document={document} 
-                    compact={compact}
-                    onDownload={handleDocumentDownload}
-                  />
-                </Col>
+                <DocumentCard 
+                  key={document.id}
+                  document={document} 
+                  compact={compact}
+                  onDownload={handleDocumentDownload}
+                />
               ))}
-            </Row>
+            </div>
           ) : (
             <div className="document-list-view">
               {displayDocuments.map((document) => (
