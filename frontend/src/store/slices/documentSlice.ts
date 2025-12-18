@@ -235,9 +235,8 @@ const documentSlice = createSlice({
       .addCase(uploadDocument.fulfilled, (state, action) => {
         state.isUploading = false;
         state.uploadProgress = 100;
-        if (action.payload) {
-          state.documents.unshift(action.payload);
-        }
+        // Don't add to documents list - pending documents are shown in user profile
+        // Only approved documents appear in the main document list
       })
       .addCase(uploadDocument.rejected, (state, action) => {
         state.isUploading = false;

@@ -201,20 +201,18 @@ const getMe = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        user: {
-          id: user.user_id,
-          email: user.email,
-          username: user.username,
-          fullName: user.full_name,
-          bio: user.bio,
-          university: user.university,
-          major: user.major,
-          role: user.role,
-          credits: user.credits,
-          isVerifiedAuthor: user.is_verified_author,
-          avatarUrl: user.avatar_url,
-          createdAt: user.created_at
-        }
+        id: user.user_id,
+        email: user.email,
+        username: user.username,
+        fullName: user.full_name,
+        bio: user.bio,
+        university: user.university,
+        major: user.major,
+        role: user.role,
+        credits: parseInt(user.credits) || 0,
+        isVerifiedAuthor: user.is_verified_author,
+        avatarUrl: user.avatar_url,
+        createdAt: user.created_at
       }
     });
   } catch (error) {
@@ -385,6 +383,57 @@ const verifyEmail = async (req, res, next) => {
   }
 };
 
+const resendVerification = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email không được cung cấp'
+      });
+    }
+
+    const result = await query(
+      'SELECT user_id, username, email, email_verified FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Email không tồn tại'
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (user.email_verified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email đã được xác thực'
+      });
+    }
+
+    const verificationToken = generateVerificationToken();
+    const verificationExpires = getTokenExpiration(24);
+
+    await query(
+      `UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE user_id = $3`,
+      [verificationToken, verificationExpires, user.user_id]
+    );
+
+    await emailService.sendVerificationEmail(user.email, user.username, verificationToken);
+
+    res.json({
+      success: true,
+      message: 'Email xác thực đã được gửi lại'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Google OAuth - Initiate authentication
 const googleAuth = async (req, res, next) => {
   const passport = require('passport');
@@ -400,21 +449,31 @@ const googleCallback = async (req, res, next) => {
   const passport = require('passport');
   require('../config/passport');
   
+  console.log('🔵 Google OAuth Callback - Start processing');
+  
   passport.authenticate('google', {
     session: false,
     failureRedirect: `${config.FRONTEND_URL}/login?error=google_auth_failed`
   }, (err, user, info) => {
+    console.log('🔵 Google OAuth Callback - Passport authentication result');
+    console.log('Error:', err ? err.message : 'None');
+    console.log('User:', user ? user.user_id : 'None');
+    console.log('Info:', info);
+    
     if (err) {
-      console.error('Google OAuth error:', err);
+      console.error('❌ Google OAuth error:', err);
       return res.redirect(`${config.FRONTEND_URL}/login?error=google_auth_error`);
     }
     
     if (!user) {
+      console.error('❌ Google OAuth no user returned');
       return res.redirect(`${config.FRONTEND_URL}/login?error=google_no_user`);
     }
     
     // Generate JWT token
     const token = generateToken(user.user_id);
+    console.log('✅ Google OAuth success - Token generated for user:', user.user_id);
+    console.log('Redirecting to:', `${config.FRONTEND_URL}/oauth-success?token=${token.substring(0, 20)}...`);
     
     // Redirect to frontend with token
     res.redirect(`${config.FRONTEND_URL}/oauth-success?token=${token}`);

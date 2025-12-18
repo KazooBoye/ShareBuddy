@@ -13,6 +13,7 @@ import { toast } from 'react-toastify';
 import RatingComponent from '../../components/ratings/RatingComponent';
 import CommentSection from '../../components/comments/CommentSection';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import QuestionList from '../../components/QuestionList';
 
 const DocumentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -285,6 +286,10 @@ const DocumentDetailPage: React.FC = () => {
                 
                 <Tab eventKey="comments" title="Bình luận">
                   <CommentSection documentId={currentDocument.id} />
+                </Tab>
+                
+                <Tab eventKey="questions" title="Hỏi & Đáp">
+                  <QuestionList documentId={currentDocument.id} />
                 </Tab>
               </Tabs>
             </Card.Body>

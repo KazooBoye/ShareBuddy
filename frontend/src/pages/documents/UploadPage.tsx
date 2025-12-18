@@ -4,7 +4,10 @@
 
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, ProgressBar } from 'react-bootstrap';
-import { FaUpload, FaFileAlt, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaUpload, FaFileAlt, FaCheckCircle, FaExclamationTriangle, FaClock } from 'react-icons/fa';
+import { documentService } from '../../services/documentService';
+import { useNavigate } from 'react-router-dom';
+import ModerationStatusBadge from '../../components/ModerationStatusBadge';
 
 interface UploadFormData {
   title: string;
@@ -19,6 +22,7 @@ interface UploadFormData {
 }
 
 const UploadPage: React.FC = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState<UploadFormData>({
     title: '',
     description: '',
@@ -33,8 +37,9 @@ const UploadPage: React.FC = () => {
   
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'pending' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [moderationInfo, setModerationInfo] = useState<{ jobId: string; status: string } | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -102,18 +107,36 @@ const UploadPage: React.FC = () => {
 
     setUploading(true);
     setUploadStatus('idle');
+    setUploadProgress(0);
     
     try {
-      // Simulate upload progress
-      for (let i = 0; i <= 100; i += 10) {
-        setUploadProgress(i);
-        await new Promise(resolve => setTimeout(resolve, 200));
+      const response = await documentService.uploadDocument(
+        {
+          title: formData.title,
+          description: formData.description,
+          subject: formData.subject,
+          university: formData.university,
+          creditCost: formData.creditCost,
+          isPublic: formData.isPublic,
+          isPremium: formData.isPremium,
+          tags: formData.tags
+        },
+        formData.file!,
+        (progress) => setUploadProgress(progress)
+      );
+      
+      // Check if document is pending moderation
+      const documentStatus = response.data?.document?.status || 'pending';
+      const moderation = response.data?.moderation;
+      
+      if (documentStatus === 'pending') {
+        setUploadStatus('pending');
+        setModerationInfo(moderation || null);
+      } else {
+        setUploadStatus('success');
       }
       
-      // TODO: Implement actual file upload to backend
-      console.log('Upload form data:', formData);
-      
-      setUploadStatus('success');
+      // Reset form
       setFormData({
         title: '',
         description: '',
@@ -125,15 +148,18 @@ const UploadPage: React.FC = () => {
         tags: '',
         file: null
       });
-    } catch (error) {
-      setErrorMessage('Có lỗi xảy ra khi tải lên tài liệu');
+      
+      // Redirect to my documents after 3 seconds
+      setTimeout(() => {
+        navigate('/profile?tab=documents');
+      }, 3000);
+      
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      setErrorMessage(error?.error || error?.message || 'Có lỗi xảy ra khi tải lên tài liệu');
       setUploadStatus('error');
     } finally {
       setUploading(false);
-      setTimeout(() => {
-        setUploadProgress(0);
-        setUploadStatus('idle');
-      }, 2000);
     }
   };
 
@@ -159,7 +185,30 @@ const UploadPage: React.FC = () => {
               {uploadStatus === 'success' && (
                 <Alert variant="success" className="d-flex align-items-center">
                   <FaCheckCircle className="me-2" />
-                  Tài liệu đã được tải lên thành công! Đang chờ phê duyệt.
+                  Tài liệu đã được tải lên thành công và đã có sẵn để tải xuống!
+                </Alert>
+              )}
+
+              {uploadStatus === 'pending' && (
+                <Alert variant="warning" className="mb-3">
+                  <div className="d-flex align-items-start">
+                    <FaClock className="me-2 mt-1" size={20} />
+                    <div className="flex-grow-1">
+                      <h6 className="mb-2">
+                        <ModerationStatusBadge status="pending" size="md" />
+                      </h6>
+                      <p className="mb-2">
+                        Tài liệu của bạn đã được tải lên thành công và đang được hệ thống AI kiểm duyệt tự động. 
+                        Quá trình này thường mất 2-5 giây.
+                      </p>
+                      <p className="mb-0 small text-muted">
+                        💡 Bạn sẽ nhận được thông báo ngay khi tài liệu được phê duyệt và có thể tải xuống.
+                        {moderationInfo && (
+                          <span className="d-block mt-1">Job ID: {moderationInfo.jobId}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
                 </Alert>
               )}
 
@@ -248,19 +297,6 @@ const UploadPage: React.FC = () => {
                   </Col>
                 </Row>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Mô tả *</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={4}
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    placeholder="Mô tả chi tiết về nội dung tài liệu, phạm vi kiến thức, đối tượng sử dụng..."
-                    required
-                  />
-                </Form.Group>
-
                 <Row>
                   <Col md={6}>
                     <Form.Group className="mb-3">
@@ -276,20 +312,41 @@ const UploadPage: React.FC = () => {
                   </Col>
                   <Col md={6}>
                     <Form.Group className="mb-3">
-                      <Form.Label>Chi phí credits</Form.Label>
+                      <Form.Label>Chi phí tải xuống</Form.Label>
                       <Form.Select
                         name="creditCost"
                         value={formData.creditCost}
                         onChange={handleInputChange}
                       >
-                        <option value={1}>1 credit (Miễn phí)</option>
+                        <option value={0}>0 credits (Miễn phí)</option>
+                        <option value={1}>1 credit</option>
                         <option value={2}>2 credits</option>
                         <option value={3}>3 credits</option>
                         <option value={5}>5 credits</option>
+                        <option value={10}>10 credits</option>
                       </Form.Select>
                     </Form.Group>
                   </Col>
                 </Row>
+
+                {/* Credit Reward Notification */}
+                <Alert variant="success" className="d-flex align-items-center mb-3">
+                  <FaCheckCircle className="me-2" />
+                  <span>💰 Bạn sẽ nhận được 1 credit với mỗi tài liệu tải lên!</span>
+                </Alert>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Mô tả *</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={4}
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    placeholder="Mô tả chi tiết về nội dung tài liệu, phạm vi kiến thức, đối tượng sử dụng..."
+                    required
+                  />
+                </Form.Group>
 
                 <Form.Group className="mb-3">
                   <Form.Label>Tags (phân cách bằng dấu phẩy)</Form.Label>

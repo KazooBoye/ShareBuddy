@@ -42,11 +42,10 @@ const DocumentList: React.FC<DocumentListProps> = ({
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(defaultView);
   const [sortBy, setSortBy] = useState('newest');
-  const [currentPage, setCurrentPage] = useState(1);
   
   // Determine which documents to display
-  const displayDocuments = documentsOverride || 
-    (searchParams.get('search') ? searchResults : documents);
+  // Always use documents array since fetchDocuments handles all filters including search
+  const displayDocuments = documentsOverride || documents;
 
   // Parse search params to filters
   const getFiltersFromUrl = useCallback((): DocumentSearchParams => {
@@ -86,7 +85,13 @@ const DocumentList: React.FC<DocumentListProps> = ({
   // Handle filter changes
   const handleFilterChange = (newFilters: Partial<DocumentSearchParams>) => {
     const currentFilters = getFiltersFromUrl();
-    const updatedFilters = { ...currentFilters, ...newFilters, page: 1 };
+    // Only reset to page 1 if we're changing filters other than page
+    const shouldResetPage = !('page' in newFilters) && Object.keys(newFilters).length > 0;
+    const updatedFilters = { 
+      ...currentFilters, 
+      ...newFilters,
+      ...(shouldResetPage ? { page: 1 } : {})
+    };
     
     // Update URL params
     const newSearchParams = new URLSearchParams();
@@ -106,8 +111,9 @@ const DocumentList: React.FC<DocumentListProps> = ({
 
   // Handle pagination
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
     handleFilterChange({ page });
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Handle document download
@@ -294,24 +300,16 @@ const DocumentList: React.FC<DocumentListProps> = ({
       ) : (
         <>
           {viewMode === 'grid' ? (
-            <Row className="document-grid">
+            <div className="document-grid">
               {displayDocuments.map((document) => (
-                <Col 
-                  key={document.id} 
-                  xs={12} 
-                  sm={6} 
-                  lg={compact ? 6 : 4} 
-                  xl={compact ? 4 : 3}
-                  className="mb-4"
-                >
-                  <DocumentCard 
-                    document={document} 
-                    compact={compact}
-                    onDownload={handleDocumentDownload}
-                  />
-                </Col>
+                <DocumentCard 
+                  key={document.id}
+                  document={document} 
+                  compact={compact}
+                  onDownload={handleDocumentDownload}
+                />
               ))}
-            </Row>
+            </div>
           ) : (
             <div className="document-list-view">
               {displayDocuments.map((document) => (

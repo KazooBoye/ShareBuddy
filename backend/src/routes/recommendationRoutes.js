@@ -6,10 +6,10 @@
 const express = require('express');
 const router = express.Router();
 const recommendationController = require('../controllers/recommendationController');
-const { authenticate } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 
 // Get personalized recommendations (authenticated users only)
-router.get('/', authenticate, recommendationController.getRecommendations);
+router.get('/', protect, recommendationController.getRecommendations);
 
 // Get similar documents (public)
 router.get('/similar/:documentId', recommendationController.getSimilarDocuments);
@@ -18,6 +18,6 @@ router.get('/similar/:documentId', recommendationController.getSimilarDocuments)
 router.get('/popular', recommendationController.getPopularDocuments);
 
 // Track interaction (authenticated users only)
-router.post('/track', authenticate, recommendationController.trackInteraction);
+router.post('/track', protect, recommendationController.trackInteraction);
 
 module.exports = router;

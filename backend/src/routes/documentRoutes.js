@@ -18,46 +18,8 @@ const documentIdValidation = [
     .withMessage('Document ID không hợp lệ')
 ];
 
-const uploadValidation = [
-  body('title')
-    .isLength({ min: 3, max: 500 })
-    .withMessage('Tiêu đề phải có từ 3-500 ký tự')
-    .trim(),
-  body('description')
-    .optional()
-    .isLength({ max: 2000 })
-    .withMessage('Mô tả không được vượt quá 2000 ký tự')
-    .trim(),
-  body('university')
-    .optional()
-    .isLength({ max: 255 })
-    .withMessage('Tên trường không được vượt quá 255 ký tự')
-    .trim(),
-  body('subject')
-    .optional()
-    .isLength({ max: 255 })
-    .withMessage('Môn học không được vượt quá 255 ký tự')
-    .trim(),
-  body('tags')
-    .optional()
-    .custom((value) => {
-      if (typeof value === 'string') {
-        const tags = value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-        if (tags.length > 10) {
-          throw new Error('Không được có quá 10 tags');
-        }
-        return true;
-      }
-      if (Array.isArray(value) && value.length > 10) {
-        throw new Error('Không được có quá 10 tags');
-      }
-      return true;
-    }),
-  body('creditCost')
-    .optional()
-    .isInt({ min: 0, max: 100 })
-    .withMessage('Chi phí credit phải từ 0-100')
-];
+// Upload validation is handled manually in the controller
+// to ensure proper error handling after multer processes the file
 
 const ratingValidation = [
   body('rating')
@@ -91,13 +53,13 @@ router.get('/search', optionalAuth, documentController.searchDocuments);
 router.get('/featured', optionalAuth, documentController.getFeaturedDocuments);
 router.get('/recent', optionalAuth, documentController.getRecentDocuments);
 router.get('/popular', optionalAuth, documentController.getPopularDocuments);
-router.get('/tags', documentController.getPopularTags);
+router.get('/suggest-tags', documentController.getSuggestedTags);
 router.get('/:id', optionalAuth, documentIdValidation, documentController.getDocumentById);
 router.get('/:id/preview', optionalAuth, documentIdValidation, documentController.previewDocument);
 
 // Protected routes - require authentication
-router.post('/upload', protect, uploadDocument, handleUploadError, uploadValidation, documentController.uploadDocument);
-router.put('/:id', protect, documentIdValidation, uploadValidation, documentController.updateDocument);
+router.post('/upload', protect, uploadDocument, handleUploadError, documentController.uploadDocument);
+router.put('/:id', protect, documentIdValidation, documentController.updateDocument);
 router.delete('/:id', protect, documentIdValidation, documentController.deleteDocument);
 
 // Document interactions

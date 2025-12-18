@@ -40,6 +40,7 @@ export interface Document {
   status: 'pending' | 'approved' | 'rejected';
   avgRating?: string;
   ratingCount: number;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
   author: {
@@ -58,6 +59,12 @@ export interface Document {
       comment: string;
     };
     canDownload: boolean;
+  };
+  moderation?: {
+    jobId: string;
+    status: string;
+    score?: number;
+    flags?: string[];
   };
 }
 
@@ -186,6 +193,27 @@ export interface Pagination {
   hasPrevPage: boolean;
 }
 
+// Document upload response types
+export interface DocumentUploadResponse {
+  document: {
+    id: string;
+    title: string;
+    description: string;
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    subject: string;
+    university?: string;
+    creditCost: number;
+    status: 'pending' | 'approved' | 'rejected';
+    createdAt: string;
+  };
+  moderation?: {
+    jobId: string;
+    status: string;
+  } | null;
+}
+
 // API Response types
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -229,10 +257,12 @@ export interface UpdatePasswordForm {
 export interface DocumentUploadForm {
   title: string;
   description: string;
-  category: string;
   subject: string;
+  university?: string;
   creditCost: number;
-  tags?: string[];
+  isPublic?: boolean;
+  isPremium?: boolean;
+  tags?: string | string[];
 }
 
 export interface DocumentSearchParams {

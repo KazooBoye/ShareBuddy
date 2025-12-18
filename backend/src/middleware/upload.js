@@ -6,11 +6,27 @@
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
 
-// Configure storage
+// Ensure upload directories exist
+const documentsDir = path.join(__dirname, '../../uploads/documents');
+const avatarDir = path.join(__dirname, '../../uploads/avatars');
+
+if (!fs.existsSync(documentsDir)) {
+  fs.mkdirSync(documentsDir, { recursive: true });
+  console.log('✅ Created documents upload directory:', documentsDir);
+}
+
+if (!fs.existsSync(avatarDir)) {
+  fs.mkdirSync(avatarDir, { recursive: true });
+  console.log('✅ Created avatar upload directory:', avatarDir);
+}
+
+// Configure storage - save directly to permanent documents folder
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../uploads/documents'));
+    // Upload directly to documents folder (no temp folder needed)
+    cb(null, documentsDir);
   },
   filename: (req, file, cb) => {
     // Generate unique filename with timestamp and UUID
@@ -88,7 +104,7 @@ const handleUploadError = (err, req, res, next) => {
 const uploadAvatar = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
-      cb(null, path.join(__dirname, '../../uploads/avatars'));
+      cb(null, avatarDir);
     },
     filename: (req, file, cb) => {
       const uniqueName = `avatar-${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`;

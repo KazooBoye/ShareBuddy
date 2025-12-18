@@ -82,7 +82,7 @@ const AppContent: React.FC = () => {
               <Route path="/verified-authors" element={<VerifiedAuthorsPage />} />
               <Route path="/search" element={<SearchPage />} />
               
-              {/* Auth Routes */
+              {/* Auth Routes */}
               <Route 
                 path="/login" 
                 element={
@@ -98,6 +98,8 @@ const AppContent: React.FC = () => {
               <Route path="/oauth-success" element={<OAuthSuccessPage />} />
               <Route path="/verify-email" element={<VerifyEmailPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              
               {/* Protected Routes */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
@@ -108,8 +110,6 @@ const AppContent: React.FC = () => {
                 <Route path="/verified-author/request" element={<VerifiedAuthorRequestPage />} />
                 <Route path="/purchase-credits" element={<PurchaseCreditsPage />} />
                 <Route path="/payment-history" element={<PaymentHistoryPage />} />
-              </Route> path="/profile/:userId" element={<ProfilePage />} />
-                <Route path="/admin" element={<AdminPage />} />
               </Route>
 
               {/* Catch all route */}

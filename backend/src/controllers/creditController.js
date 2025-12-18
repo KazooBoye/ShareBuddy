@@ -63,10 +63,10 @@ const getTransactionHistory = async (req, res, next) => {
     // Get transactions with related document info
     const transactionsResult = await query(
       `SELECT ct.transaction_id, ct.amount, ct.transaction_type, ct.description,
-              ct.created_at, ct.related_document_id,
+              ct.created_at, ct.reference_id,
               d.title as document_title, d.thumbnail_url
        FROM credit_transactions ct
-       LEFT JOIN documents d ON ct.related_document_id = d.document_id
+       LEFT JOIN documents d ON ct.reference_id = d.document_id
        ${whereCondition}
        ORDER BY ct.created_at DESC
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
@@ -84,13 +84,13 @@ const getTransactionHistory = async (req, res, next) => {
     const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
 
-    // Calculate summary statistics
+    // Calculate summary statistics based on amount (positive = earned, negative = spent)
     const statsResult = await query(
       `SELECT 
          SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as total_earned,
          SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as total_spent,
-         COUNT(CASE WHEN transaction_type = 'earn' THEN 1 END) as earn_count,
-         COUNT(CASE WHEN transaction_type = 'download' THEN 1 END) as spend_count
+         COUNT(CASE WHEN amount > 0 THEN 1 END) as earn_count,
+         COUNT(CASE WHEN amount < 0 THEN 1 END) as spend_count
        FROM credit_transactions
        WHERE user_id = $1`,
       [userId]
@@ -107,8 +107,8 @@ const getTransactionHistory = async (req, res, next) => {
           type: row.transaction_type,
           description: row.description,
           createdAt: row.created_at,
-          document: row.related_document_id ? {
-            id: row.related_document_id,
+          document: row.reference_id ? {
+            id: row.reference_id,
             title: row.document_title,
             thumbnailUrl: row.thumbnail_url
           } : null
@@ -454,7 +454,7 @@ const getCreditStatistics = async (req, res, next) => {
          COUNT(ct.transaction_id) as purchase_count,
          SUM(ct.amount) as total_earned
        FROM documents d
-       JOIN credit_transactions ct ON d.document_id = ct.related_document_id
+       JOIN credit_transactions ct ON d.document_id = ct.reference_id
        WHERE ct.transaction_type = 'earn' AND ct.created_at >= NOW() - INTERVAL '${period} days'
        GROUP BY d.document_id, d.title, d.credit_cost
        ORDER BY total_earned DESC

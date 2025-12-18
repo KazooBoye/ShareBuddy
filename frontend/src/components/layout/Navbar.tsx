@@ -15,6 +15,9 @@ const Navbar: React.FC = () => {
   const { theme } = useAppSelector((state) => state.ui);
   const { user, isAuthenticated, logout } = useAuth();
 
+  // Default avatar as data URL to prevent infinite requests
+  const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%236c757d"/%3E%3Ctext x="20" y="26" font-size="20" fill="white" text-anchor="middle" font-family="Arial"%3E👤%3C/text%3E%3C/svg%3E';
+
   const handleLogout = async () => {
     await logout();
     navigate('/');
@@ -22,20 +25,21 @@ const Navbar: React.FC = () => {
 
   return (
     <BSNavbar bg="dark" variant="dark" expand="lg" fixed="top" className="shadow-sm">
-      <Container fluid>
-        {/* Sidebar toggle button */}
+      <Container fluid className="px-3 px-md-4">
+        {/* Sidebar toggle button - only on desktop */}
         <Button
           variant="outline-light"
           size="sm"
           onClick={() => dispatch(toggleSidebar())}
-          className="me-3"
+          className="me-2 me-md-3 d-none d-lg-block"
         >
           <i className="bi bi-list"></i>
         </Button>
 
         {/* Brand */}
         <BSNavbar.Brand as={Link} to="/" className="fw-bold text-gradient-purple">
-          📚 ShareBuddy
+          <span className="d-none d-sm-inline">📚 ShareBuddy</span>
+          <span className="d-inline d-sm-none">📚 SB</span>
         </BSNavbar.Brand>
 
         <BSNavbar.Toggle aria-controls="basic-navbar-nav" />
@@ -46,37 +50,41 @@ const Navbar: React.FC = () => {
             <Nav.Link as={Link} to="/documents">Tài liệu</Nav.Link>
           </Nav>
 
-          <Nav className="align-items-center">
+          <Nav className="align-items-lg-center">
             {/* Theme toggle */}
             <Button
               variant="outline-light"
               size="sm"
               onClick={() => dispatch(toggleTheme())}
-              className="me-2"
+              className="me-2 mb-2 mb-lg-0"
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </Button>
 
             {isAuthenticated ? (
               <>
-                <Nav.Link as={Link} to="/upload" className="me-2">
+                <Nav.Link as={Link} to="/upload" className="mb-2 mb-lg-0">
                   Tải lên
                 </Nav.Link>
-                <Nav.Link as={Link} to="/dashboard" className="me-2">
+                <Nav.Link as={Link} to="/dashboard" className="mb-2 mb-lg-0">
                   Dashboard
                 </Nav.Link>
-                <div className="d-flex align-items-center">
-                  <img
-                    src={user?.avatarUrl || '/default-avatar.png'}
-                    alt="Avatar"
-                    className="user-avatar me-2"
-                    onError={(e) => {
-                      e.currentTarget.src = '/default-avatar.png';
-                    }}
-                  />
-                  <span className="me-2 text-light d-none d-md-inline">
-                    {user?.username}
-                  </span>
+                <div className="d-flex align-items-center flex-wrap gap-2">
+                  <div className="d-flex align-items-center">
+                    <img
+                      src={user?.avatarUrl || DEFAULT_AVATAR}
+                      alt="Avatar"
+                      className="user-avatar me-2"
+                      style={{ width: '32px', height: '32px', borderRadius: '50%' }}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = DEFAULT_AVATAR;
+                      }}
+                    />
+                    <span className="me-2 text-light">
+                      {user?.username}
+                    </span>
+                  </div>
                   <Button
                     variant="outline-light"
                     size="sm"
@@ -88,7 +96,7 @@ const Navbar: React.FC = () => {
               </>
             ) : (
               <>
-                <Nav.Link as={Link} to="/login" className="me-2">
+                <Nav.Link as={Link} to="/login" className="mb-2 mb-lg-0">
                   Đăng nhập
                 </Nav.Link>
                 <Link

@@ -3,7 +3,6 @@
  * Handles document management, search, and related operations
  */
 
-const { validationResult } = require('express-validator');
 const { query, withTransaction } = require('../config/database');
 const path = require('path');
 
@@ -16,14 +15,14 @@ const getDocuments = async (req, res, next) => {
     
     const {
       search,
-      category,
       subject,
       university,
       major,
       minRating,
       maxCost,
       sortBy = 'created_at',
-      sortOrder = 'DESC'
+      sortOrder = 'DESC',
+      tags
     } = req.query;
 
     // Build WHERE clause dynamically
@@ -33,20 +32,14 @@ const getDocuments = async (req, res, next) => {
 
     if (search) {
       paramCount++;
-      whereConditions.push(`(d.title ILIKE $${paramCount} OR d.description ILIKE $${paramCount})`);
+      whereConditions.push(`d.title ILIKE $${paramCount}`);
       queryParams.push(`%${search}%`);
-    }
-
-    if (category) {
-      paramCount++;
-      whereConditions.push(`d.category = $${paramCount}`);
-      queryParams.push(category);
     }
 
     if (subject) {
       paramCount++;
-      whereConditions.push(`d.subject = $${paramCount}`);
-      queryParams.push(subject);
+      whereConditions.push(`d.subject ILIKE $${paramCount}`);
+      queryParams.push(`%${subject}%`);
     }
 
     if (university) {
@@ -63,7 +56,7 @@ const getDocuments = async (req, res, next) => {
 
     if (minRating) {
       paramCount++;
-      whereConditions.push(`avg_ratings.avg_rating >= $${paramCount}`);
+      whereConditions.push(`d.average_rating >= $${paramCount}`);
       queryParams.push(parseFloat(minRating));
     }
 
@@ -73,6 +66,36 @@ const getDocuments = async (req, res, next) => {
       queryParams.push(parseInt(maxCost));
     }
 
+    // TAGS FILTER (Updated for comma support and partial matching)
+    if (tags) {
+      let tagsArray = [];
+      
+      // Handle array input (?tags=a&tags=b) OR comma-separated string (?tags=a,b)
+      if (Array.isArray(tags)) {
+        tagsArray = tags;
+      } else if (typeof tags === 'string') {
+        // Split by comma and trim whitespace
+        tagsArray = tags.split(',').map(t => t.trim());
+      }
+
+      // Clean up empty strings
+      tagsArray = tagsArray.filter(tag => tag.length > 0);
+
+      if (tagsArray.length > 0) {
+        // Use EXISTS for each tag. 
+        // Logic: Document must match ANY of the provided tags (OR logic).
+        // If you want it to match ALL tags (AND logic), change the .join(' OR ') to .join(' AND ') below.
+        const existsConditions = tagsArray.map((tag) => {
+          paramCount++;
+          queryParams.push(`%${tag}%`); 
+          // ILIKE ensures case-insensitive partial match (e.g., "jav" finds "Java" and "JavaScript")
+          return `EXISTS (SELECT 1 FROM document_tags t WHERE t.document_id = d.document_id AND t.tag_name ILIKE $${paramCount})`;
+        });
+        
+        whereConditions.push(`(${existsConditions.join(' OR ')})`);
+      }
+    }
+
     // Add pagination params
     queryParams.push(limit, offset);
     const limitParam = ++paramCount;
@@ -80,11 +103,31 @@ const getDocuments = async (req, res, next) => {
 
     const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
     
-    // Validate sort parameters
-    const validSortFields = ['created_at', 'title', 'download_count', 'avg_rating', 'credit_cost'];
-    const validSortOrders = ['ASC', 'DESC'];
-    const finalSortBy = validSortFields.includes(sortBy) ? sortBy : 'created_at';
-    const finalSortOrder = validSortOrders.includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
+    // Map frontend sortBy values to backend columns
+    const sortByMapping = {
+      'newest': 'created_at',
+      'oldest': 'created_at',
+      'popular': 'download_count',
+      'rating': 'average_rating',
+      'downloads': 'download_count',
+      'created_at': 'created_at',
+      'title': 'title',
+      'download_count': 'download_count',
+      'avg_rating': 'average_rating',
+      'credit_cost': 'credit_cost'
+    };
+    
+    const sortOrderMapping = {
+      'newest': 'DESC',
+      'oldest': 'ASC',
+      'popular': 'DESC',
+      'rating': 'DESC',
+      'downloads': 'DESC'
+    };
+    
+    const mappedSortBy = sortByMapping[sortBy] || 'created_at';
+    const mappedSortOrder = sortOrderMapping[sortBy] || sortOrder.toUpperCase();
+    const finalSortOrder = ['ASC', 'DESC'].includes(mappedSortOrder) ? mappedSortOrder : 'DESC';
 
     const documentsQuery = `
       SELECT 
@@ -102,26 +145,25 @@ const getDocuments = async (req, res, next) => {
         d.is_public,
         d.is_premium,
         d.status,
+        d.average_rating,
+        d.rating_count,
         d.created_at,
         d.updated_at,
-        u.username as author_name,
-        u.full_name as author_full_name,
-        COALESCE(avg_ratings.avg_rating, 0) as average_rating,
-        COALESCE(rating_counts.rating_count, 0) as rating_count
+        u.user_id,
+        u.username,
+        u.full_name,
+        u.avatar_url,
+        u.is_verified_author,
+        COALESCE(
+          (SELECT array_agg(tag_name) 
+           FROM document_tags 
+           WHERE document_id = d.document_id), 
+          ARRAY[]::text[]
+        ) as tags
       FROM documents d
       JOIN users u ON d.author_id = u.user_id
-      LEFT JOIN (
-        SELECT document_id, AVG(rating) as avg_rating
-        FROM ratings
-        GROUP BY document_id
-      ) avg_ratings ON d.document_id = avg_ratings.document_id
-      LEFT JOIN (
-        SELECT document_id, COUNT(*) as rating_count
-        FROM ratings
-        GROUP BY document_id
-      ) rating_counts ON d.document_id = rating_counts.document_id
       ${whereClause}
-      ORDER BY ${finalSortBy === 'avg_rating' ? 'avg_ratings.avg_rating' : 'd.' + finalSortBy} ${finalSortOrder}
+      ORDER BY ${mappedSortBy === 'average_rating' ? 'd.average_rating' : 'd.' + mappedSortBy} ${finalSortOrder}
       LIMIT $${limitParam} OFFSET $${offsetParam}
     `;
 
@@ -132,11 +174,6 @@ const getDocuments = async (req, res, next) => {
       SELECT COUNT(DISTINCT d.document_id) as total
       FROM documents d
       JOIN users u ON d.author_id = u.user_id
-      LEFT JOIN (
-        SELECT document_id, AVG(rating) as avg_rating
-        FROM ratings
-        GROUP BY document_id
-      ) avg_ratings ON d.document_id = avg_ratings.document_id
       ${whereClause}
     `;
 
@@ -147,18 +184,18 @@ const getDocuments = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        documents: result.rows.map(row => ({
+        items: result.rows.map(row => ({
           id: row.document_id,
           title: row.title,
           description: row.description,
-          fileUrl: row.file_url,
-          thumbnailUrl: row.thumbnail_url,
-          category: row.category,
           subject: row.subject,
+          university: row.university,
           creditCost: row.credit_cost,
           downloadCount: row.download_count,
-          avgRating: parseFloat(row.avg_rating).toFixed(1),
-          ratingCount: parseInt(row.rating_count),
+          viewCount: row.view_count,
+          avgRating: row.average_rating ? parseFloat(row.average_rating).toFixed(1) : '0.0',
+          ratingCount: row.rating_count || 0,
+          tags: row.tags || [],
           createdAt: row.created_at,
           author: {
             id: row.user_id,
@@ -168,24 +205,11 @@ const getDocuments = async (req, res, next) => {
             isVerifiedAuthor: row.is_verified_author
           }
         })),
-        pagination: {
-          currentPage: page,
-          totalPages,
-          totalItems: total,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
-        },
-        filters: {
-          search: search || null,
-          category: category || null,
-          subject: subject || null,
-          university: university || null,
-          major: major || null,
-          minRating: minRating || null,
-          maxCost: maxCost || null,
-          sortBy: finalSortBy,
-          sortOrder: finalSortOrder
-        }
+        page,
+        totalPages,
+        totalItems: total,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
       }
     });
   } catch (error) {
@@ -200,14 +224,14 @@ const getDocument = async (req, res, next) => {
 
     const result = await query(
       `SELECT d.document_id, d.title, d.description, d.file_url, d.thumbnail_url,
-              d.category, d.subject, d.credit_cost, d.download_count, d.status,
+              d.subject, d.credit_cost, d.download_count, d.status,
               d.created_at, d.updated_at,
               u.user_id, u.username, u.full_name, u.avatar_url, u.is_verified_author,
               u.university, u.major,
               AVG(r.rating) as avg_rating,
               COUNT(r.rating_id) as rating_count
        FROM documents d
-       JOIN users u ON d.user_id = u.user_id
+       JOIN users u ON d.author_id = u.user_id
        LEFT JOIN ratings r ON d.document_id = r.document_id
        WHERE d.document_id = $1
        GROUP BY d.document_id, u.user_id`,
@@ -225,7 +249,7 @@ const getDocument = async (req, res, next) => {
 
     // Check if document is approved or user is owner
     if (document.status !== 'approved' && 
-        (!req.user || req.user.user_id !== document.user_id)) {
+        (!req.user || req.user.user_id !== document.author_id)) {
       return res.status(403).json({
         success: false,
         error: 'Không có quyền truy cập tài liệu này'
@@ -278,7 +302,6 @@ const getDocument = async (req, res, next) => {
           description: document.description,
           fileUrl: document.file_url,
           thumbnailUrl: document.thumbnail_url,
-          category: document.category,
           subject: document.subject,
           creditCost: document.credit_cost,
           downloadCount: document.download_count,
@@ -288,7 +311,7 @@ const getDocument = async (req, res, next) => {
           createdAt: document.created_at,
           updatedAt: document.updated_at,
           author: {
-            id: document.user_id,
+            id: document.author_id,
             username: document.username,
             fullName: document.full_name,
             avatarUrl: document.avatar_url,
@@ -312,62 +335,157 @@ const getDocument = async (req, res, next) => {
 // Upload document
 const uploadDocument = async (req, res, next) => {
   try {
-    // Check for validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        error: 'Dữ liệu không hợp lệ',
-        details: errors.array()
-      });
-    }
-
+    const requestId = Math.random().toString(36).substring(7);
+    console.log(`\n🆕 [${requestId}] Upload request received`);
+    console.log(`[${requestId}] Request body:`, req.body);
+    console.log(`[${requestId}] Request file:`, req.file);
+    
     if (!req.file) {
+      console.log(`[${requestId}] No file in request`);
       return res.status(400).json({
         success: false,
         error: 'Không có file được upload'
       });
     }
 
+    // Validate required fields
+    const { title } = req.body;
+    
+    if (!title || title.trim().length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Tiêu đề phải có ít nhất 3 ký tự'
+      });
+    }
+
     const {
-      title,
       description,
-      category,
       subject,
-      creditCost
+      creditCost,
+      university,
+      tags
     } = req.body;
 
     const userId = req.user.user_id;
-    const fileUrl = `/uploads/documents/${req.file.filename}`;
+    const fileUrl = `/uploads/documents/${req.file.filename}`; // Permanent path
+    const fileName = req.file.originalname;
+    const fileSize = req.file.size;
+    const fileType = path.extname(req.file.originalname).toLowerCase().slice(1);
     
-    // Create document
-    const result = await query(
-      `INSERT INTO documents (user_id, title, description, file_url, category, subject, credit_cost, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING document_id, title, description, file_url, category, subject, credit_cost, status, created_at`,
-      [userId, title, description, fileUrl, category, subject, parseInt(creditCost), 'pending']
-    );
+    console.log(`[${requestId}] Creating document with data:`, {
+      userId,
+      title,
+      description,
+      subject,
+      university,
+      creditCost,
+      fileUrl,
+      fileName,
+      fileSize,
+      fileType,
+      tags
+    });
+    
+    let document;
+    let moderationJob;
+    
+    // Use transaction to ensure all operations succeed or fail together
+    console.log(`[${requestId}] 🔄 Starting transaction for user ${userId}`);
+    await withTransaction(async (client) => {
+      console.log(`[${requestId}] 📝 Inserting document with status 'pending'...`);
+      
+      // Create document with status 'pending' (awaiting moderation)
+      const result = await client.query(
+        `INSERT INTO documents (author_id, title, description, file_path, file_name, file_size, file_type, subject, university, credit_cost, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING document_id, title, description, file_path, file_name, file_size, file_type, subject, university, credit_cost, status, created_at`,
+        [userId, title, description, fileUrl, fileName, fileSize, fileType, subject, university || null, parseInt(creditCost) || 0, 'pending']
+      );
 
-    const document = result.rows[0];
+      document = result.rows[0];
+      console.log(`[${requestId}] ✅ Document created with ID: ${document.document_id}, status: pending`);
+      
+      // Create moderation job record
+      console.log(`[${requestId}] 📋 Creating moderation job record...`);
+      const moderationResult = await client.query(
+        `INSERT INTO moderation_jobs (document_id, moderation_status)
+         VALUES ($1, $2)
+         RETURNING job_id, document_id, moderation_status, created_at`,
+        [document.document_id, 'queued']
+      );
+      moderationJob = moderationResult.rows[0];
+      console.log(`[${requestId}] ✅ Moderation job created with ID: ${moderationJob.job_id}`);
+    });
+    console.log(`[${requestId}] ✅ Transaction completed successfully`);
+    
+    // Process and insert tags if provided
+    if (tags) {
+      const tagList = typeof tags === 'string' 
+        ? tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+        : Array.isArray(tags) ? tags : [];
+      
+      if (tagList.length > 0) {
+        console.log(`[${requestId}] Inserting tags:`, tagList);
+        for (const tag of tagList) {
+          await query(
+            'INSERT INTO document_tags (document_id, tag_name) VALUES ($1, $2)',
+            [document.document_id, tag]
+          );
+        }
+      }
+    }
+    
+    // Push to Redis queue for AI moderation (async, non-blocking)
+    console.log(`[${requestId}] 🚀 Pushing to Redis queue for moderation...`);
+    setImmediate(async () => {
+      try {
+        const { addModerationJob } = require('../services/moderationQueue');
+        await addModerationJob({
+          document_id: document.document_id,
+          file_path: fileUrl,
+          metadata: {
+            title,
+            description,
+            subject,
+            fileType,
+            userId
+          }
+        });
+        console.log(`[${requestId}] ✅ Job pushed to Redis queue successfully`);
+      } catch (queueError) {
+        console.error(`[${requestId}] ⚠️ Failed to push to Redis queue:`, queueError.message);
+        // Log but don't fail - moderation job record exists and can be retried
+      }
+    });
+    
+    console.log(`[${requestId}] ℹ️ Credit will be awarded after moderation approval`);
+    console.log(`[${requestId}] 🎉 Document uploaded successfully - awaiting moderation`);
 
     res.status(201).json({
       success: true,
-      message: 'Upload tài liệu thành công. Đang chờ duyệt.',
+      message: 'Tài liệu đã được tải lên và đang được kiểm duyệt. Bạn sẽ nhận được thông báo khi tài liệu được phê duyệt.',
       data: {
         document: {
           id: document.document_id,
           title: document.title,
           description: document.description,
-          fileUrl: document.file_url,
-          category: document.category,
+          fileName: document.file_name,
+          fileSize: document.file_size,
+          fileType: document.file_type,
           subject: document.subject,
+          university: document.university,
           creditCost: document.credit_cost,
           status: document.status,
           createdAt: document.created_at
-        }
+        },
+        moderation: moderationJob ? {
+          jobId: moderationJob.job_id,
+          status: moderationJob.moderation_status
+        } : null
       }
     });
   } catch (error) {
+    console.error('Upload error:', error);
     next(error);
   }
 };
@@ -380,7 +498,7 @@ const downloadDocument = async (req, res, next) => {
 
     // Get document info
     const docResult = await query(
-      'SELECT user_id, title, file_url, credit_cost FROM documents WHERE document_id = $1 AND status = $2',
+      'SELECT author_id, title, file_url, credit_cost FROM documents WHERE document_id = $1 AND status = $2',
       [id, 'approved']
     );
 
@@ -432,18 +550,6 @@ const downloadDocument = async (req, res, next) => {
 
     // Process download with transaction
     await withTransaction(async (client) => {
-      // Deduct credits from user
-      await client.query(
-        'UPDATE users SET credits = credits - $1 WHERE user_id = $2',
-        [document.credit_cost, userId]
-      );
-
-      // Add credits to document owner
-      await client.query(
-        'UPDATE users SET credits = credits + $1 WHERE user_id = $2',
-        [document.credit_cost, document.user_id]
-      );
-
       // Record download
       await client.query(
         'INSERT INTO downloads (user_id, document_id) VALUES ($1, $2)',
@@ -456,17 +562,17 @@ const downloadDocument = async (req, res, next) => {
         [id]
       );
 
-      // Record credit transactions
+      // Record credit transactions (trigger will auto-update user credits)
       await client.query(
-        `INSERT INTO credit_transactions (user_id, amount, transaction_type, description, related_document_id)
+        `INSERT INTO credit_transactions (user_id, amount, transaction_type, description, reference_id)
          VALUES ($1, $2, $3, $4, $5)`,
         [userId, -document.credit_cost, 'download', `Tải tài liệu: ${document.title}`, id]
       );
 
       await client.query(
-        `INSERT INTO credit_transactions (user_id, amount, transaction_type, description, related_document_id)
+        `INSERT INTO credit_transactions (user_id, amount, transaction_type, description, reference_id)
          VALUES ($1, $2, $3, $4, $5)`,
-        [document.user_id, document.credit_cost, 'earn', `Bán tài liệu: ${document.title}`, id]
+        [document.author_id, document.credit_cost, 'earn', `Bán tài liệu: ${document.title}`, id]
       );
     });
 
@@ -478,6 +584,35 @@ const downloadDocument = async (req, res, next) => {
         title: document.title,
         creditsSpent: document.credit_cost
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getSuggestedTags = async (req, res, next) => {
+  try {
+    const { q } = req.query; // The character(s) typed by user
+
+    if (!q || q.trim().length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Query distinct tags that contain the characters
+    // LIMIT 10 to keep the dropdown/suggestion list manageable
+    const tagQuery = `
+      SELECT DISTINCT tag_name 
+      FROM document_tags 
+      WHERE tag_name ILIKE $1 
+      ORDER BY tag_name ASC 
+      LIMIT 10
+    `;
+
+    const result = await query(tagQuery, [`%${q.trim()}%`]);
+
+    res.json({
+      success: true,
+      data: result.rows.map(row => row.tag_name)
     });
   } catch (error) {
     next(error);
@@ -585,32 +720,7 @@ const removeBookmark = async (req, res, next) => {
   }
 };
 
-const getCategories = async (req, res) => {
-  const categories = [
-    'Khoa học Tự nhiên',
-    'Khoa học Xã hội',
-    'Công nghệ Thông tin',
-    'Kinh tế',
-    'Ngôn ngữ',
-    'Nghệ thuật',
-    'Y học',
-    'Luật',
-    'Giáo dục',
-    'Khác'
-  ];
-  
-  res.json({
-    success: true,
-    data: { categories }
-  });
-};
 
-const getSubjects = async (req, res) => {
-  res.status(501).json({
-    success: false,
-    error: 'Chức năng lấy môn học chưa được triển khai'
-  });
-};
 
 const reportDocument = async (req, res) => {
   res.status(501).json({
@@ -626,28 +736,26 @@ module.exports = {
   getFeaturedDocuments: getDocuments,
   getRecentDocuments: getDocuments,
   getPopularDocuments: getDocuments,
-  getPopularTags: getCategories,
+  getSuggestedTags,
   previewDocument: getDocument,
-  incrementView: getDocument, // Placeholder
+  incrementView: getDocument, // TODO: Implement view counter
   uploadDocument,
   updateDocument,
   deleteDocument,
   downloadDocument,
-  rateDocument,
-  getDocumentRatings,
-  updateRating: rateDocument, // Placeholder
-  deleteRating: deleteDocument, // Placeholder
-  addComment: rateDocument, // Placeholder - will use comment controller later
-  getDocumentComments: getDocumentRatings, // Placeholder
-  updateComment: rateDocument, // Placeholder
-  deleteComment: deleteDocument, // Placeholder
-  likeComment: rateDocument, // Placeholder
-  unlikeComment: deleteDocument, // Placeholder
+  rateDocument, // Placeholder - use ratingController instead
+  getDocumentRatings, // Placeholder - use ratingController instead
+  updateRating: rateDocument,
+  deleteRating: deleteDocument,
+  addComment: rateDocument, // Placeholder - use commentController instead
+  getDocumentComments: getDocumentRatings,
+  updateComment: rateDocument,
+  deleteComment: deleteDocument,
+  likeComment: rateDocument,
+  unlikeComment: deleteDocument,
   bookmarkDocument,
   removeBookmark,
   getUserBookmarks: getDocuments,
-  getCategories,
-  getSubjects,
   reportDocument,
-  getDocumentAnalytics: getDocument // Placeholder
+  getDocumentAnalytics: getDocument // TODO: Implement analytics
 };

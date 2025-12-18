@@ -28,39 +28,57 @@ const recommendationRoutes = require('./routes/recommendationRoutes');
 const verifiedAuthorRoutes = require('./routes/verifiedAuthorRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const searchRoutes = require('./routes/searchRoutes');
+const creditRoutes = require('./routes/creditRoutes');
+const webhookRoutes = require('./routes/webhookRoutes');
 // Keep problematic routes disabled
 // const ratingRoutes = require('./routes/ratingRoutes');
 // const commentRoutes = require('./routes/commentRoutes');
-// const creditRoutes = require('./routes/creditRoutes');
 // const socialRoutes = require('./routes/socialRoutes');
 // const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+// Rate limiting configuration
+// Strict rate limiter for authentication endpoints (login, register)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 auth requests per windowMs
+  message: {
+    error: 'Quá nhiều requests đăng nhập/đăng ký, vui lòng thử lại sau.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Lenient rate limiter for general API endpoints
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // limit each IP to 1000 requests per windowMs
   message: {
     error: 'Quá nhiều requests từ IP này, vui lòng thử lại sau.'
-  }
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // Middleware setup
-app.use(limiter);
+// CORS configuration - Must be before other middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200
+}));
+
+// Apply general rate limiter to all routes
+app.use(generalLimiter);
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(compression());
 app.use(morgan('combined'));
-
-// CORS configuration
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
-  optionsSuccessStatus: 200
-}));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -95,10 +113,11 @@ app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/verified-author', verifiedAuthorRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/credits', creditRoutes);
+app.use('/api/webhooks', webhookRoutes);
 // Keep problematic routes disabled for now
 // app.use('/api/ratings', ratingRoutes);
 // app.use('/api/comments', commentRoutes);
-// app.use('/api/credits', creditRoutes);
 // app.use('/api/social', socialRoutes);
 // app.use('/api/admin', adminRoutes);
 
@@ -147,6 +166,11 @@ const startServer = async () => {
     await connectDB();
     console.log('✅ Database connected successfully');
     
+    // Initialize moderation queue
+    const { initQueue } = require('./services/moderationQueue');
+    await initQueue();
+    console.log('✅ Moderation queue initialized');
+    
     // Start server
     app.listen(PORT, () => {
       console.log(`🚀 ShareBuddy server running on port ${PORT}`);
@@ -173,13 +197,17 @@ process.on('uncaughtException', (err) => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('👋 SIGTERM received. Shutting down gracefully...');
+  const { closeQueue } = require('./services/moderationQueue');
+  await closeQueue();
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('👋 SIGINT received. Shutting down gracefully...');
+  const { closeQueue } = require('./services/moderationQueue');
+  await closeQueue();
   process.exit(0);
 });
 

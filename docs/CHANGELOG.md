@@ -2,6 +2,241 @@
 
 All notable changes to ShareBuddy project will be documented in this file.
 
+## [1.6.2] - 2025-12-17
+
+### 🎯 Architecture Simplification
+
+#### Removed Temp Folder - Direct Upload to Permanent Storage
+- **Simplified**: Upload flow no longer uses temporary folder
+  - Files now saved directly to `/uploads/documents/` instead of `/uploads/temp/`
+  - Removed unnecessary file moving logic from webhook handler
+  - Moderation service doesn't require temp folder for processing
+  
+- **Changed Files**:
+  - [backend/src/middleware/upload.js](backend/src/middleware/upload.js)
+    * Changed destination from `tempDir` to `documentsDir`
+    * Updated storage comments to reflect permanent path
+  - [backend/src/controllers/documentController.js](backend/src/controllers/documentController.js)
+    * Changed fileUrl from `/uploads/temp/` to `/uploads/documents/`
+  - [backend/src/controllers/webhookController.js](backend/src/controllers/webhookController.js)
+    * Removed `moveFileToPermanentStorage()` function (no longer needed)
+    * Updated `deleteDocumentFile()` to use documents folder
+    * Removed file moving logic from approval flow
+    * Credits awarded immediately after approval (file already in correct location)
+
+- **Workflow Now**:
+  ```
+  1. Upload → File saved to uploads/documents/ immediately
+  2. Document status = 'pending'
+  3. Moderation queue processes document
+  4. Webhook receives result:
+     - APPROVED: Award credit (file already in place)
+     - REJECTED: Delete file from documents folder
+  ```
+
+- **Benefits**:
+  - ✅ Simpler code - fewer moving parts
+  - ✅ Faster approval - no file moving delay
+  - ✅ Less error-prone - no file move failures
+  - ✅ Cleaner architecture - single source of truth for file location
+
+## [1.6.1] - 2025-12-17
+
+### 🔧 Bug Fixes & Improvements
+
+#### Backend: Restored Moderation Workflow
+- **Fixed**: Document upload now correctly uses pending status and moderation queue
+  - Changed status from 'approved' to 'pending' on upload
+  - Creates moderation_jobs record with status='queued'
+  - Pushes job to Redis queue using Bull
+  - **Credit award moved**: Credits now awarded ONLY after AI approval (via webhook)
+  - File: [backend/src/controllers/documentController.js](backend/src/controllers/documentController.js)
+
+#### Frontend: Fixed TypeScript Errors
+- **Added**: `DocumentUploadResponse` interface for proper type safety
+  - Defines structure: `document` object with nested properties
+  - Includes optional `moderation` object with jobId and status
+  - File: [frontend/src/types/index.ts](frontend/src/types/index.ts)
+- **Updated**: `uploadDocument` service to use correct return type
+  - Changed from `ApiResponse<Document>` to `ApiResponse<DocumentUploadResponse>`
+  - File: [frontend/src/services/documentService.ts](frontend/src/services/documentService.ts)
+
+#### CSS: Browser Compatibility
+- **Added**: Standard `line-clamp` property alongside `-webkit-line-clamp`
+  - Fixes CSS validation warnings
+  - Improves compatibility with modern browsers
+  - Applied to: `.card-title`, `.text-truncate-2`, `.text-truncate-3`
+  - File: [frontend/src/styles/components.css](frontend/src/styles/components.css)
+
+#### Complete Upload → Approval Workflow
+```
+1. User uploads document → status='pending', file in uploads/temp
+2. Backend creates moderation_jobs record (status='queued')
+3. Job pushed to Redis queue (Bull)
+4. AI service picks up job, analyzes content
+5. AI sends webhook callback with score
+6. Webhook handler (backend/src/controllers/webhookController.js):
+   - If score > 0.5 (APPROVED):
+     * Move file: uploads/temp → uploads/documents
+     * Award 1 credit to user
+     * Update status to 'approved'
+   - If score ≤ 0.5 (REJECTED):
+     * Delete temp file
+     * Update status to 'rejected'
+     * No credit awarded
+7. Frontend shows final status in user profile
+```
+
+### 📝 Files Modified
+- `backend/src/controllers/documentController.js` - Restored moderation workflow
+- `frontend/src/types/index.ts` - Added DocumentUploadResponse interface
+- `frontend/src/services/documentService.ts` - Updated uploadDocument return type
+- `frontend/src/styles/components.css` - Added standard line-clamp property
+
+### ✅ Verification
+- All TypeScript compilation errors resolved
+- All CSS validation warnings resolved
+- Moderation workflow matches system specification
+- Credit system aligned with approval process
+
+---
+
+## [1.6.0] - 2025-12-15
+
+### ✨ Module 9: AI-Powered Automated Moderation System
+
+#### 🤖 Moderation Infrastructure
+- **Architecture**: Microservices approach with Redis message queue
+  - Separate Docker container for moderation service (port 5002)
+  - Bull queue for async job processing
+  - Redis as message broker (port 6379)
+  - Webhook callback system for results delivery
+
+#### 🗄️ Database Migration (migration_003_moderation_system.sql)
+- **moderation_jobs Table** (9 columns):
+  - job_id, document_id, moderation_status, moderation_score
+  - moderation_flags (TEXT[]), extracted_text_preview
+  - model_version, retry_count, timestamps
+  - moderation_job_status ENUM: queued, processing, completed, failed, cancelled
+- **documents Table Updates** (3 columns added):
+  - has_moderation_data (BOOLEAN)
+  - moderation_score (DECIMAL 3,2)
+  - rejection_reason (TEXT)
+- **Trigger Function**: sync_moderation_to_documents()
+  - Auto-updates documents.status when moderation completes
+  - Score >0.5 → approved, ≤0.5 → rejected
+- **View**: documents_with_moderation (LEFT JOIN for queries)
+- **Function**: get_moderation_stats() (queue statistics)
+
+#### 🐳 Docker & Redis Setup
+- **docker-compose.yml**:
+  - redis service (256MB memory, allkeys-lru, health check)
+  - moderation-service (shares volumes with backend)
+  - Shared volumes: backend-uploads, upload-temp, redis-data
+- **Environment Variables**:
+  - REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
+  - MODERATION_SERVICE_URL, MODERATION_WEBHOOK_SECRET
+
+#### 🧠 Moderation Service (15 files)
+- **AI Analysis**:
+  - TensorFlow.js toxicity model (threshold 0.7)
+  - Hybrid scoring: AI 70% + Rules 30%
+  - Text extraction: PDF (pdf-parse), DOCX (mammoth), TXT (first 1000 chars)
+- **Rule-Based Filters**:
+  - Spam pattern detection
+  - Profanity checking
+  - Caps ratio analysis
+  - Repetition detection
+- **Queue Processing**:
+  - Bull processor (concurrency: 2)
+  - 3 retry attempts with exponential backoff
+  - Job tracking and statistics
+- **Webhook Sender**:
+  - HTTP POST to backend with retry logic
+  - X-Webhook-Secret header validation
+- **Dependencies**: @tensorflow/tfjs-node, @tensorflow-models/toxicity, pdf-parse, mammoth, bull, redis, express
+
+#### 🔧 Backend Integration
+- **Upload Middleware** (`upload.js`):
+  - Changed destination: `/uploads/documents/` → `/uploads/temp/`
+  - Files stored in temp folder pending moderation
+- **Moderation Queue Service** (`moderationQueue.js`):
+  - Bull queue wrapper with initQueue(), addModerationJob()
+  - Queue statistics (waiting, active, completed, failed)
+  - Graceful shutdown with closeQueue()
+- **Webhook Controller** (`webhookController.js`):
+  - POST `/api/webhooks/moderation` endpoint
+  - receiveModerationResult() - main handler
+  - moveFileToPermanentStorage() - temp → permanent on approval
+  - deleteTempFile() - remove temp file on rejection
+  - X-Webhook-Secret validation
+- **Webhook Routes** (`webhookRoutes.js`):
+  - Registered in app.js at `/api/webhooks`
+- **Document Controller** (`documentController.js` - uploadDocument()):
+  - Status changed: 'approved' → 'pending'
+  - File path: `/uploads/documents/` → `/uploads/temp/`
+  - Creates moderation_jobs record (status='queued')
+  - Pushes job to Redis queue via addModerationJob()
+  - Response message: "đang được kiểm duyệt. Bạn sẽ nhận được thông báo"
+  - Returns moderation job info in response
+
+#### 🚀 Server Startup Updates
+- **app.js**:
+  - Initialize moderation queue on startup: `await initQueue()`
+  - Close queue on graceful shutdown (SIGTERM, SIGINT)
+  - Webhook routes registered at `/api/webhooks`
+
+#### 📦 Dependencies Added
+- `bull` (^4.12.0) - Job queue management
+- `redis` (^4.6.12) - Redis client for Node.js
+
+#### 📁 File System
+- Created `/backend/uploads/temp/` directory for pending files
+- Existing `/backend/uploads/documents/` for approved files
+
+#### 🎨 Frontend Updates
+- **ModerationStatusBadge Component** (`ModerationStatusBadge.tsx`):
+  - Visual status badges with icons (pending, approved, rejected)
+  - Displays moderation score percentage for admins
+  - Color-coded: warning (pending), success (approved), danger (rejected)
+  - Responsive sizing: sm, md, lg
+  
+- **UploadPage** (`UploadPage.tsx`):
+  - Updated to handle pending status response
+  - Shows detailed moderation status alert after upload
+  - Displays moderation job ID for tracking
+  - User-friendly message about AI moderation process
+  - Automatic redirect to profile after 3 seconds
+  
+- **ProfilePage** (`ProfilePage.tsx`):
+  - Added status filter dropdown (All, Pending, Approved, Rejected)
+  - Displays moderation badge on each document card
+  - Only shows approved documents to other users
+  - Shows all documents (with status) to document owner
+  - Filter by moderation status for own documents
+
+#### 🔄 Moderation Workflow
+1. User uploads document → saved to `/uploads/temp/`
+2. documents table: status='pending'
+3. moderation_jobs table: record created (status='queued')
+4. Job pushed to Redis queue
+5. Moderation service processes (extract text → AI + rules)
+6. Webhook sends results to backend
+7. Backend updates moderation_jobs with score and flags
+8. Database trigger updates documents.status ('approved' if score >0.5)
+9. File moved: `/uploads/temp/` → `/uploads/documents/` (if approved)
+10. Temp file deleted (if rejected)
+
+#### 🎯 AI Scoring Algorithm
+- Final Score = (AI Score × 0.7) + (Rule Score × 0.3)
+- Threshold: >0.5 approve, ≤0.5 reject
+- Flags: toxic, spam, profanity, excessive_caps, repetitive_content
+
+#### 🔐 Security
+- Webhook secret validation (X-Webhook-Secret header)
+- Temp file isolation (not publicly accessible)
+- Admin can takedown approved documents (change to rejected)
+
 ## [1.5.0] - 2025-12-14
 
 ### ✨ Module 3: Payment System (Stripe) & Module 8: Full-Text Search
