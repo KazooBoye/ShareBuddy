@@ -1,12 +1,9 @@
-/**
- * QuestionDetail Page - Display question with answers
- */
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Container, Card, Button, Badge, Form, Alert, Spinner } from 'react-bootstrap';
-import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
+import { questionService } from '../services/questionService';
+import { toast } from 'react-toastify';
 
 interface Answer {
   id: string;
@@ -44,7 +41,7 @@ interface QuestionDetail {
 const QuestionDetailPage: React.FC = () => {
   const { questionId } = useParams<{ questionId: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated, token, user } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   const [question, setQuestion] = useState<QuestionDetail | null>(null);
   const [answers, setAnswers] = useState<Answer[]>([]);
@@ -53,82 +50,67 @@ const QuestionDetailPage: React.FC = () => {
   const [newAnswer, setNewAnswer] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchQuestion();
-  }, [questionId]);
-
-  const fetchQuestion = async () => {
+  const fetchQuestion = useCallback(async () => {
+    if (!questionId) return;
     try {
       setLoading(true);
-      const response = await axios.get(`/api/questions/${questionId}`);
-      setQuestion(response.data.data.question);
-      setAnswers(response.data.data.answers);
-      setLoading(false);
+      const res = await questionService.getQuestionById(questionId);
+      if (res.success && res.data) {
+        setQuestion(res.data.question);
+        setAnswers(res.data.answers);
+      }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Không thể tải câu hỏi');
+      setError(err.error || 'Không thể tải câu hỏi');
+    } finally {
       setLoading(false);
+    }
+  }, [questionId]);
+
+  useEffect(() => {
+    fetchQuestion();
+  }, [fetchQuestion]);
+
+  const handleVoteQuestion = async (voteType: 1 | -1) => {
+    if (!isAuthenticated || !questionId) {
+      toast.error('Vui lòng đăng nhập để vote');
+      return;
+    }
+    try {
+      await questionService.voteQuestion(questionId, voteType);
+      fetchQuestion(); // Refresh to show new vote count
+    } catch (err: any) {
+      toast.error(err.error || 'Không thể vote');
     }
   };
 
-  const handleVoteQuestion = async (voteType: number) => {
+  const handleVoteAnswer = async (answerId: string, voteType: 1 | -1) => {
     if (!isAuthenticated) {
-      alert('Vui lòng đăng nhập để vote');
+      toast.error('Vui lòng đăng nhập để vote');
       return;
     }
-
     try {
-      await axios.post(
-        `/api/questions/${questionId}/vote`,
-        { voteType },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await questionService.voteAnswer(answerId, voteType);
       fetchQuestion();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Không thể vote');
-    }
-  };
-
-  const handleVoteAnswer = async (answerId: string, voteType: number) => {
-    if (!isAuthenticated) {
-      alert('Vui lòng đăng nhập để vote');
-      return;
-    }
-
-    try {
-      await axios.post(
-        `/api/questions/answer/${answerId}/vote`,
-        { voteType },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      fetchQuestion();
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Không thể vote');
+      toast.error(err.error || 'Không thể vote');
     }
   };
 
   const handleSubmitAnswer = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!isAuthenticated) {
-      alert('Vui lòng đăng nhập để trả lời');
+    if (!isAuthenticated || !questionId) {
+      toast.error('Vui lòng đăng nhập để trả lời');
       return;
     }
 
     try {
       setSubmitting(true);
-      await axios.post(
-        '/api/questions/answer',
-        {
-          questionId,
-          content: newAnswer
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
+      await questionService.createAnswer(questionId, newAnswer);
+      toast.success('Gửi câu trả lời thành công');
       setNewAnswer('');
       fetchQuestion();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Không thể gửi câu trả lời');
+      toast.error(err.error || 'Không thể gửi câu trả lời');
     } finally {
       setSubmitting(false);
     }
@@ -136,19 +118,15 @@ const QuestionDetailPage: React.FC = () => {
 
   const handleAcceptAnswer = async (answerId: string) => {
     if (!isAuthenticated) {
-      alert('Vui lòng đăng nhập');
+      toast.error('Vui lòng đăng nhập');
       return;
     }
-
     try {
-      await axios.post(
-        `/api/questions/answer/${answerId}/accept`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await questionService.acceptAnswer(answerId);
+      toast.success('Đã chấp nhận câu trả lời');
       fetchQuestion();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Không thể chấp nhận câu trả lời');
+      toast.error(err.error || 'Không thể chấp nhận câu trả lời');
     }
   };
 
@@ -172,7 +150,7 @@ const QuestionDetailPage: React.FC = () => {
     );
   }
 
-  const isQuestionAuthor = user?.id === question.author.username;
+  const isQuestionAuthor = user?.id === question.author.username || user?.username === question.author.username;
 
   return (
     <Container className="py-4" style={{ marginTop: '80px' }}>
@@ -181,47 +159,26 @@ const QuestionDetailPage: React.FC = () => {
       </Button>
 
       {/* Question */}
-      <Card className="mb-4 mt-3">
+      <Card className="mb-4 mt-3 border-0 shadow-sm">
         <Card.Body>
           <div className="d-flex">
             <div className="d-flex flex-column align-items-center me-3" style={{ minWidth: '50px' }}>
-              <Button
-                variant="link"
-                size="sm"
-                className="p-0 text-secondary"
-                onClick={() => handleVoteQuestion(1)}
-              >
-                ▲
-              </Button>
+              <Button variant="link" size="sm" className="p-0 text-secondary" onClick={() => handleVoteQuestion(1)}>▲</Button>
               <span className="fw-bold fs-4">{question.voteCount}</span>
-              <Button
-                variant="link"
-                size="sm"
-                className="p-0 text-secondary"
-                onClick={() => handleVoteQuestion(-1)}
-              >
-                ▼
-              </Button>
+              <Button variant="link" size="sm" className="p-0 text-secondary" onClick={() => handleVoteQuestion(-1)}>▼</Button>
             </div>
 
             <div className="flex-grow-1">
               <h2>{question.title}</h2>
-              
               <div className="d-flex gap-2 mb-3">
-                {question.isAnswered && (
-                  <Badge bg="success">✓ Đã trả lời</Badge>
-                )}
+                {question.isAnswered && <Badge bg="success">✓ Đã trả lời</Badge>}
                 <Badge bg="info">{question.viewCount} lượt xem</Badge>
               </div>
-
-              <p className="lead">{question.content}</p>
-
-              <div className="d-flex justify-content-between align-items-center text-muted small mt-3">
+              <p className="lead" style={{ whiteSpace: 'pre-wrap' }}>{question.content}</p>
+              <div className="d-flex justify-content-between align-items-center text-muted small mt-3 border-top pt-2">
                 <div>
                   Hỏi bởi <strong>{question.author.name}</strong>
-                  {question.author.isVerified && (
-                    <Badge bg="primary" className="ms-1">✓ Verified</Badge>
-                  )}
+                  {question.author.isVerified && <Badge bg="primary" className="ms-1">✓</Badge>}
                 </div>
                 <span>{new Date(question.createdAt).toLocaleString('vi-VN')}</span>
               </div>
@@ -232,57 +189,26 @@ const QuestionDetailPage: React.FC = () => {
 
       {/* Answers */}
       <h4 className="mb-3">{answers.length} Câu trả lời</h4>
-
       {answers.map((answer) => (
-        <Card key={answer.id} className={`mb-3 ${answer.isAccepted ? 'border-success' : ''}`}>
+        <Card key={answer.id} className={`mb-3 ${answer.isAccepted ? 'border-success' : 'border-0 shadow-sm'}`}>
           <Card.Body>
             <div className="d-flex">
               <div className="d-flex flex-column align-items-center me-3" style={{ minWidth: '50px' }}>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="p-0 text-secondary"
-                  onClick={() => handleVoteAnswer(answer.id, 1)}
-                >
-                  ▲
-                </Button>
+                <Button variant="link" size="sm" className="p-0 text-secondary" onClick={() => handleVoteAnswer(answer.id, 1)}>▲</Button>
                 <span className="fw-bold">{answer.voteCount}</span>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="p-0 text-secondary"
-                  onClick={() => handleVoteAnswer(answer.id, -1)}
-                >
-                  ▼
-                </Button>
-
+                <Button variant="link" size="sm" className="p-0 text-secondary" onClick={() => handleVoteAnswer(answer.id, -1)}>▼</Button>
                 {isQuestionAuthor && !answer.isAccepted && (
-                  <Button
-                    variant="outline-success"
-                    size="sm"
-                    className="mt-2"
-                    onClick={() => handleAcceptAnswer(answer.id)}
-                  >
-                    ✓
-                  </Button>
+                  <Button variant="outline-success" size="sm" className="mt-2" onClick={() => handleAcceptAnswer(answer.id)}>✓</Button>
                 )}
               </div>
 
               <div className="flex-grow-1">
-                {answer.isAccepted && (
-                  <Badge bg="success" className="mb-2">
-                    ✓ Câu trả lời được chấp nhận
-                  </Badge>
-                )}
-                
-                <p>{answer.content}</p>
-
+                {answer.isAccepted && <Badge bg="success" className="mb-2">✓ Câu trả lời được chấp nhận</Badge>}
+                <p style={{ whiteSpace: 'pre-wrap' }}>{answer.content}</p>
                 <div className="d-flex justify-content-between align-items-center text-muted small">
                   <div>
                     Trả lời bởi <strong>{answer.author.name}</strong>
-                    {answer.author.isVerified && (
-                      <Badge bg="primary" className="ms-1">✓</Badge>
-                    )}
+                    {answer.author.isVerified && <Badge bg="primary" className="ms-1">✓</Badge>}
                   </div>
                   <span>{new Date(answer.createdAt).toLocaleString('vi-VN')}</span>
                 </div>
@@ -293,8 +219,8 @@ const QuestionDetailPage: React.FC = () => {
       ))}
 
       {/* Answer Form */}
-      <Card className="mt-4">
-        <Card.Header>
+      <Card className="mt-4 shadow-sm border-0">
+        <Card.Header className="bg-white">
           <h5 className="mb-0">Câu trả lời của bạn</h5>
         </Card.Header>
         <Card.Body>
@@ -311,14 +237,12 @@ const QuestionDetailPage: React.FC = () => {
                   minLength={20}
                 />
               </Form.Group>
-
               <Alert variant="info">
                 <small>
                   Bạn sẽ nhận được <strong>2 credits</strong> khi trả lời câu hỏi.
                   Nếu câu trả lời được chấp nhận, bạn sẽ nhận thêm <strong>5 credits</strong>!
                 </small>
               </Alert>
-
               <Button variant="primary" type="submit" disabled={submitting}>
                 {submitting ? 'Đang gửi...' : 'Gửi câu trả lời'}
               </Button>

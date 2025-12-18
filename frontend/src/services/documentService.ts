@@ -3,6 +3,7 @@
  */
 
 import { apiRequest, uploadFile } from './api';
+import apiClient from './api';
 import { 
   ApiResponse, 
   Document,
@@ -37,8 +38,8 @@ export const documentService = {
   },
 
   // Get document by ID
-  getDocumentById: async (id: string): Promise<ApiResponse<Document>> => {
-    return apiRequest('GET', `documents/${id}`);
+  getDocumentById: async (id: string) => {
+    return apiRequest<{ document: Document }>('GET', `/documents/${id}`);
   },
 
   // Upload new document
@@ -61,13 +62,15 @@ export const documentService = {
   },
 
   // Download document
-  downloadDocument: async (id: string): Promise<Blob> => {
-    const response = await apiRequest('GET', `documents/${id}/download`, null, {
-      responseType: 'blob'
-    });
-    return response.data || response;
+  downloadDocument: async (id: string) => {
+    // We use the raw apiClient here to handle 'blob' response type for file downloads
+    const response = await apiClient.post(
+      `/documents/${id}/download`, 
+      {}, 
+      { responseType: 'blob' }
+    );
+    return response.data;
   },
-
   // Get document preview
   previewDocument: async (id: string): Promise<ApiResponse<{ previewUrl: string }>> => {
     return apiRequest('GET', `documents/${id}/preview`);

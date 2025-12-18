@@ -1,84 +1,89 @@
 /**
  * Comment routes
- * Handles document comments and comment interactions
+ * Mounted at: /api/comments
  */
 
 const express = require('express');
-const { body, param, query } = require('express-validator');
-const { protect } = require('../middleware/auth');
+const { body, param, query, validationResult } = require('express-validator');
+const { protect, optionalAuth } = require('../middleware/auth');
 const commentController = require('../controllers/commentController');
 
 const router = express.Router();
 
-// Create comment on document
-router.post('/documents/:id/comments',
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+  next();
+};
+
+// DEBUG
+router.use((req, res, next) => {
+  console.log(`[CommentRoute] ${req.method} ${req.url}`);
+  next();
+});
+
+// --- DOCUMENT CENTRIC ROUTES ---
+
+router.post('/document/:id',
   protect,
   [
-    param('id').isUUID().withMessage('Document ID phải là UUID hợp lệ'),
-    body('content').notEmpty().isLength({ max: 2000 }).withMessage('Nội dung comment không được để trống và không quá 2000 ký tự'),
-    body('parentId').optional().isUUID().withMessage('Parent ID phải là UUID hợp lệ')
+    param('id').isUUID().withMessage('Invalid Document UUID'),
+    body('content').notEmpty().trim().isLength({ max: 2000 }),
+    body('parentId').optional().isUUID()
   ],
+  validate,
   commentController.createComment
 );
 
-// Get document comments
-router.get('/documents/:id/comments',
-  [
-    param('id').isUUID().withMessage('Document ID phải là UUID hợp lệ'),
-    query('page').optional().isInt({ min: 1 }).withMessage('Page phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit phải từ 1 đến 50'),
-    query('sortBy').optional().isIn(['created_at', 'updated_at']).withMessage('SortBy không hợp lệ'),
-    query('sortOrder').optional().isIn(['asc', 'desc']).withMessage('SortOrder phải là asc hoặc desc')
-  ],
+router.get('/document/:id',
+  optionalAuth,
+  [ param('id').isUUID() ],
+  validate,
   commentController.getDocumentComments
 );
 
-// Get replies for a comment
-router.get('/comments/:commentId/replies',
-  [
-    param('commentId').isUUID().withMessage('Comment ID phải là UUID hợp lệ'),
-    query('page').optional().isInt({ min: 1 }).withMessage('Page phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit phải từ 1 đến 50')
-  ],
+// --- COMMENT SPECIFIC ROUTES ---
+
+router.get('/:commentId/replies',
+  optionalAuth,
+  [ param('commentId').isUUID() ],
+  validate,
   commentController.getCommentReplies
 );
 
-// Update comment
-router.put('/comments/:commentId',
+router.put('/:commentId',
   protect,
   [
-    param('commentId').isUUID().withMessage('Comment ID phải là UUID hợp lệ'),
-    body('content').notEmpty().isLength({ max: 2000 }).withMessage('Nội dung comment không được để trống và không quá 2000 ký tự')
+    param('commentId').isUUID(),
+    body('content').notEmpty().isLength({ max: 2000 })
   ],
+  validate,
   commentController.updateComment
 );
 
-// Delete comment
-router.delete('/comments/:commentId',
+router.delete('/:commentId',
   protect,
-  [
-    param('commentId').isUUID().withMessage('Comment ID phải là UUID hợp lệ')
-  ],
+  [ param('commentId').isUUID() ],
+  validate,
   commentController.deleteComment
 );
 
-// Like/unlike comment
-router.post('/comments/:commentId/like',
+router.post('/:commentId/like',
   protect,
-  [
-    param('commentId').isUUID().withMessage('Comment ID phải là UUID hợp lệ')
-  ],
+  [ param('commentId').isUUID() ],
+  validate,
   commentController.toggleCommentLike
 );
 
-// Report comment
-router.post('/comments/:commentId/report',
+router.post('/:commentId/report',
   protect,
   [
-    param('commentId').isUUID().withMessage('Comment ID phải là UUID hợp lệ'),
-    body('reason').notEmpty().withMessage('Lý do báo cáo không được để trống'),
-    body('description').optional().isLength({ max: 500 }).withMessage('Mô tả không được quá 500 ký tự')
+    param('commentId').isUUID(),
+    body('reason').notEmpty()
   ],
+  validate,
   commentController.reportComment
 );
 

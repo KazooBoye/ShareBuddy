@@ -6,68 +6,90 @@ import { apiRequest } from './api';
 import { ApiResponse, Comment, PaginatedResponse } from '../types';
 
 export const commentService = {
-  // Get comments for a document
+  // Get comments (Mapped to PaginatedResponse)
   getDocumentComments: async (
     documentId: string, 
-    page?: number, 
-    limit?: number
+    page = 1, 
+    limit = 10, 
+    sortOption: 'newest' | 'oldest' | 'popular' = 'newest'
   ): Promise<ApiResponse<PaginatedResponse<Comment>>> => {
-    const params = new URLSearchParams();
-    if (page) params.append('page', page.toString());
-    if (limit) params.append('limit', limit.toString());
     
-    const query = params.toString();
-    const url = query ? `comments/document/${documentId}?${query}` : `comments/document/${documentId}`;
-    
-    return apiRequest('GET', url);
+    // Map frontend sort option to backend params
+    let sortBy = 'created_at';
+    let sortOrder = 'desc';
+
+    if (sortOption === 'oldest') {
+      sortOrder = 'asc';
+    } else if (sortOption === 'popular') {
+      sortBy = 'popular';
+    }
+
+    const response = await apiRequest<any>(
+      'GET', 
+      `/comments/document/${documentId}`, 
+      null, 
+      { params: { page, limit, sortBy, sortOrder } } // Pass params here
+    );
+
+    if (response.success && response.data) {
+      const { comments, pagination } = response.data;
+      
+      const mappedData: PaginatedResponse<Comment> = {
+        items: comments || [],
+        page: pagination?.currentPage || 1,
+        totalPages: pagination?.totalPages || 1,
+        totalItems: pagination?.totalItems || 0,
+        hasNext: pagination ? pagination.currentPage < pagination.totalPages : false,
+        hasPrev: pagination ? pagination.currentPage > 1 : false,
+      };
+
+      return { ...response, data: mappedData };
+    }
+
+    return response;
   },
 
-  // Get replies for a comment
-  getCommentReplies: async (
-    commentId: string, 
-    page?: number, 
-    limit?: number
-  ): Promise<ApiResponse<PaginatedResponse<Comment>>> => {
-    const params = new URLSearchParams();
-    if (page) params.append('page', page.toString());
-    if (limit) params.append('limit', limit.toString());
-    
-    const query = params.toString();
-    const url = query ? `comments/${commentId}/replies?${query}` : `comments/${commentId}/replies`;
-    
-    return apiRequest('GET', url);
+  // Create comment (Root)
+  createComment: async (documentId: string, content: string): Promise<ApiResponse<{ comment: Comment }>> => {
+    return apiRequest(
+      'POST', 
+      `/comments/document/${documentId}`,
+      { content }
+    );
   },
 
-  // Add comment to document
-  addComment: async (documentId: string, content: string): Promise<ApiResponse<Comment>> => {
-    return apiRequest('POST', 'comments', {
-      documentId,
-      content
-    });
+  // Reply to comment
+  replyToComment: async (documentId: string, parentId: string, content: string): Promise<ApiResponse<{ comment: Comment }>> => {
+    return apiRequest(
+      'POST', 
+      `/comments/document/${documentId}`,
+      { content, parentId }
+    );
   },
 
-  // Reply to a comment
-  replyToComment: async (parentCommentId: string, content: string): Promise<ApiResponse<Comment>> => {
-    return apiRequest('POST', `comments/${parentCommentId}/reply`, {
-      content
-    });
+  // Get replies
+  getCommentReplies: async (commentId: string, page = 1, limit = 5): Promise<ApiResponse<{ replies: Comment[] }>> => {
+    return apiRequest(
+      'GET', 
+      `/comments/${commentId}/replies`, 
+      null, 
+      { params: { page, limit } }
+    );
   },
 
-  // Update comment
-  updateComment: async (commentId: string, content: string): Promise<ApiResponse<Comment>> => {
-    return apiRequest('PUT', `comments/${commentId}`, {
-      content
-    });
+  // Update
+  updateComment: async (commentId: string, content: string): Promise<ApiResponse<{ comment: Comment }>> => {
+    return apiRequest('PUT', `/comments/${commentId}`, { content });
   },
 
-  // Delete comment
-  deleteComment: async (commentId: string): Promise<ApiResponse> => {
-    return apiRequest('DELETE', `comments/${commentId}`);
+  // Delete
+  deleteComment: async (commentId: string): Promise<ApiResponse<void>> => {
+    return apiRequest('DELETE', `/comments/${commentId}`);
   },
 
-  // Like/unlike a comment
+  // Like
   toggleCommentLike: async (commentId: string): Promise<ApiResponse<{ isLiked: boolean; likeCount: number }>> => {
-    return apiRequest('POST', `comments/${commentId}/like`);
+    return apiRequest('POST', `/comments/${commentId}/like`);
   },
 
   // Get user's comments

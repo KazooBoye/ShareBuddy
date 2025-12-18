@@ -1,83 +1,103 @@
 /**
  * Rating routes
- * Handles document rating and rating-related operations
+ * Mounted at: /api/ratings
  */
 
 const express = require('express');
-const { body, param, query } = require('express-validator');
-const { protect } = require('../middleware/auth');
+const { body, param, query, validationResult } = require('express-validator');
+const { protect, optionalAuth } = require('../middleware/auth');
 const ratingController = require('../controllers/ratingController');
 
 const router = express.Router();
 
-// Rate document
-router.post('/documents/:id/rate',
+// Middleware to handle validation errors
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+  next();
+};
+
+// DEBUG: Log all requests to this router
+router.use((req, res, next) => {
+  console.log(`[RatingRoute] ${req.method} ${req.url}`);
+  next();
+});
+
+// --- DOCUMENT CENTRIC ROUTES ---
+
+// 1. Rate document
+router.post('/document/:id',
   protect,
   [
-    param('id').isUUID().withMessage('Document ID phải là UUID hợp lệ'),
-    body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating phải từ 1 đến 5'),
-    body('comment').optional().isLength({ max: 1000 }).withMessage('Comment không được quá 1000 ký tự')
+    param('id').isUUID().withMessage('Invalid UUID'),
+    body('rating').isInt({ min: 1, max: 5 })
   ],
+  validate,
   ratingController.rateDocument
 );
 
-// Get document ratings
-router.get('/documents/:id/ratings',
-  [
-    param('id').isUUID().withMessage('Document ID phải là UUID hợp lệ'),
-    query('page').optional().isInt({ min: 1 }).withMessage('Page phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit phải từ 1 đến 50'),
-    query('sortBy').optional().isIn(['created_at', 'rating', 'updated_at']).withMessage('SortBy không hợp lệ'),
-    query('sortOrder').optional().isIn(['asc', 'desc']).withMessage('SortOrder phải là asc hoặc desc')
-  ],
+// 2. Get stats (specific path first)
+router.get('/document/:id/stats',
+  optionalAuth,
+  [ param('id').isUUID() ],
+  validate,
   ratingController.getDocumentRatings
 );
 
-// Get user's rating for document
-router.get('/documents/:id/my-rating',
+// 3. Get user rating
+router.get('/document/:id/user-rating',
   protect,
-  [
-    param('id').isUUID().withMessage('Document ID phải là UUID hợp lệ')
-  ],
+  [ param('id').isUUID() ],
+  validate,
   ratingController.getUserRating
 );
 
-// Delete user's rating
-router.delete('/documents/:id/rate',
+// 4. Get ratings list (generic path last)
+router.get('/document/:id',
+  optionalAuth,
+  [ param('id').isUUID() ],
+  validate,
+  ratingController.getDocumentRatings
+);
+
+router.delete('/document/:id',
   protect,
-  [
-    param('id').isUUID().withMessage('Document ID phải là UUID hợp lệ')
-  ],
+  [ param('id').isUUID() ],
+  validate,
   ratingController.deleteRating
 );
 
-// Like/unlike a rating
-router.post('/ratings/:ratingId/like',
+// --- RATING SPECIFIC ROUTES ---
+
+router.post('/:ratingId/like',
   protect,
-  [
-    param('ratingId').isUUID().withMessage('Rating ID phải là UUID hợp lệ')
-  ],
+  [ param('ratingId').isUUID() ],
+  validate,
   ratingController.toggleRatingLike
 );
 
-// Report a rating
-router.post('/ratings/:ratingId/report',
+router.post('/:ratingId/report',
   protect,
   [
-    param('ratingId').isUUID().withMessage('Rating ID phải là UUID hợp lệ'),
-    body('reason').notEmpty().withMessage('Lý do báo cáo không được để trống'),
-    body('description').optional().isLength({ max: 500 }).withMessage('Mô tả không được quá 500 ký tự')
+    param('ratingId').isUUID(),
+    body('reason').notEmpty()
   ],
+  validate,
   ratingController.reportRating
 );
 
-// Get top rated documents
+// --- GENERAL ROUTES ---
+
 router.get('/top-rated',
+  optionalAuth,
   [
-    query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit phải từ 1 đến 50'),
-    query('minRatings').optional().isInt({ min: 1 }).withMessage('MinRatings phải là số nguyên dương'),
-    query('category').optional().isLength({ min: 1 }).withMessage('Category không được để trống')
+    query('limit').optional().isInt({ min: 1, max: 50 }),
+    query('minRatings').optional().isInt({ min: 1 }),
+    query('subject').optional().isLength({ min: 1 })
   ],
+  validate,
   ratingController.getTopRatedDocuments
 );
 

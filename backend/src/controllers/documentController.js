@@ -4,6 +4,7 @@
  */
 
 const { query, withTransaction } = require('../config/database');
+const previewController = require('./previewController');
 const path = require('path');
 
 // Get all documents with filters and pagination
@@ -290,13 +291,12 @@ const getDocument = async (req, res, next) => {
 
       // Check user's rating
       const ratingResult = await query(
-        'SELECT rating, comment FROM ratings WHERE user_id = $1 AND document_id = $2',
+        'SELECT rating FROM ratings WHERE user_id = $1 AND document_id = $2',
         [req.user.user_id, id]
       );
       if (ratingResult.rows.length > 0) {
         userRating = {
-          rating: ratingResult.rows[0].rating,
-          comment: ratingResult.rows[0].comment
+          rating: ratingResult.rows[0].rating
         };
       }
 
@@ -453,6 +453,17 @@ const uploadDocument = async (req, res, next) => {
         }
       }
     }
+    
+    console.log(`[${requestId}] 🖼️ Generating preview...`);
+    previewController.generatePreviewInternal(document.document_id)
+      .then(res => {
+          if(res.success) console.log(`[${requestId}] ✅ Preview generated`);
+          else console.error(`[${requestId}] ❌ Preview generation failed:`, res.error);
+          
+          // Also generate thumbnail
+          // previewController.generateThumbnailInternal(document.document_id);
+      })
+      .catch(err => console.error(err));
     
     // Push to Redis queue for AI moderation (async, non-blocking)
     console.log(`[${requestId}] 🚀 Pushing to Redis queue for moderation...`);
