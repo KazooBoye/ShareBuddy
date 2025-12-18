@@ -14,8 +14,9 @@ const SPAM_PATTERNS = [
 ];
 
 const PROFANITY_LIST = [
-  // Add language-specific profanity here
-  // This is a basic example - expand based on your needs
+  'fuck', 'fucking', 'shit', 'damn', 'bitch', 'ass', 'asshole', 
+  'bastard', 'crap', 'piss', 'dick', 'cock', 'pussy', 'cunt',
+  'whore', 'slut', 'fag', 'nigger', 'nigga', 'retard'
 ];
 
 function applyRuleBasedChecks(text, metadata) {
@@ -23,44 +24,51 @@ function applyRuleBasedChecks(text, metadata) {
   let score = 1.0; // Start with perfect score
   let shouldReject = false;
 
+  // Combine text and title for comprehensive checking
+  const contentToCheck = text || '';
+  const titleToCheck = metadata.title || '';
+  const combinedText = `${titleToCheck} ${contentToCheck}`.toLowerCase();
+
   if (!text || text.trim().length === 0) {
     // No text content, rely on metadata
     flags.no_text_content = true;
     score = 0.8; // Slightly lower score but not rejected
-  } else {
-    // Check 1: Spam patterns
-    let spamCount = 0;
-    SPAM_PATTERNS.forEach(pattern => {
-      const matches = text.match(pattern);
-      if (matches) {
-        spamCount += matches.length;
-      }
-    });
+  }
 
-    if (spamCount > 3) {
-      flags.spam_detected = true;
-      score -= 0.3;
+  // Check 1: Spam patterns (check both title and content)
+  let spamCount = 0;
+  SPAM_PATTERNS.forEach(pattern => {
+    const matches = combinedText.match(pattern);
+    if (matches) {
+      spamCount += matches.length;
     }
+  });
 
-    // Check 2: Excessive capitalization
+  if (spamCount >= 1) {
+    flags.spam_detected = true;
+    score -= 0.3;
+  }
+
+  // Check 2: Excessive capitalization
+  if (text && text.length > 50) {
     const capsRatio = (text.match(/[A-Z]/g) || []).length / text.length;
-    if (capsRatio > 0.5 && text.length > 50) {
+    if (capsRatio > 0.5) {
       flags.excessive_caps = true;
       score -= 0.1;
     }
+  }
 
-    // Check 3: Profanity (basic check)
-    const lowerText = text.toLowerCase();
-    const profanityCount = PROFANITY_LIST.filter(word => 
-      lowerText.includes(word)
-    ).length;
+  // Check 3: Profanity (check both title and content)
+  const profanityCount = PROFANITY_LIST.filter(word => 
+    combinedText.includes(word)
+  ).length;
 
-    if (profanityCount > 2) {
-      flags.profanity_detected = true;
-      score -= 0.2;
-    }
-
-    // Check 4: Repetitive content
+  if (profanityCount >= 1) {
+    flags.profanity_detected = true;
+    score -= 0.4; // Heavy penalty for profanity
+  }
+// Check 4: Repetitive content
+  if (text && text.length > 20) {
     const words = text.split(/\s+/);
     const uniqueWords = new Set(words);
     const repetitionRatio = uniqueWords.size / words.length;
@@ -71,12 +79,11 @@ function applyRuleBasedChecks(text, metadata) {
     }
   }
 
-  // Check 5: Metadata checks
-  if (metadata.title) {
-    const title = metadata.title.toLowerCase();
+  // Check 5: Test/suspicious title patterns
+  if (titleToCheck) {
+    const titleLower = titleToCheck.toLowerCase();
     
-    // Suspicious title patterns
-    if (title.includes('test') && title.includes('ignore')) {
+    if (titleLower.includes('test') && titleLower.includes('ignore')) {
       flags.test_document = true;
       score -= 0.2;
     }
@@ -94,7 +101,7 @@ function applyRuleBasedChecks(text, metadata) {
   }
 
   // Determine if should reject immediately
-  if (score < 0.3) {
+  if (score <= 0.5) {
     shouldReject = true;
   }
 
