@@ -14,6 +14,7 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
     let paramCount = 0;
 
     // Base query with full-text search
+    // Note: paramCount starts at 0, incremented before use
     let sqlQuery = `
       SELECT 
         d.document_id,
@@ -53,11 +54,7 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
     // Add full-text search condition
     conditions.push(`d.search_vector @@ query`);
 
-    // Add filters
-    if (filters.category) {
-      conditions.push(`d.category = $${++paramCount}`);
-      queryParams.push(filters.category);
-    }
+    // --- APPLY FILTERS ---
 
     if (filters.subject) {
       conditions.push(`d.subject ILIKE $${++paramCount}`);
@@ -86,6 +83,38 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
 
     if (filters.verifiedOnly === 'true' || filters.verifiedOnly === true) {
       conditions.push('u.is_verified_author = TRUE');
+    }
+
+    // 🟢 ADDED: TAGS FILTER LOGIC
+    if (filters.tags) {
+      let tagsArray = [];
+      // Handle array or comma-separated string
+      if (Array.isArray(filters.tags)) {
+        tagsArray = filters.tags;
+      } else if (typeof filters.tags === 'string') {
+        tagsArray = filters.tags.split(',').map(t => t.trim());
+      }
+      
+      tagsArray = tagsArray.filter(tag => tag.length > 0);
+
+      if (tagsArray.length > 0) {
+        // Create OR condition: Document exists if it has ANY of the requested tags
+        // Using EXISTS prevents duplicates in the result set
+        const tagSubConditions = tagsArray.map(() => {
+          paramCount++;
+          // We push the tag value later in the loop to keep order correct
+          return `t.tag_name ILIKE $${paramCount}`;
+        });
+
+        // Add values to queryParams
+        tagsArray.forEach(tag => queryParams.push(`%${tag}%`));
+
+        conditions.push(`EXISTS (
+          SELECT 1 FROM document_tags t 
+          WHERE t.document_id = d.document_id 
+          AND (${tagSubConditions.join(' OR ')})
+        )`);
+      }
     }
 
     // Add conditions to query
@@ -123,7 +152,15 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
     // Execute search query
     const result = await query(sqlQuery, queryParams);
 
-    // Get total count for pagination
+    // ---------------------------------------------------------
+    // COUNT QUERY (Must replicate ALL filters including tags)
+    // ---------------------------------------------------------
+    
+    // We can't reuse queryParams easily because limit/offset were added. 
+    // We need to rebuild the count params.
+    const countParams = [processedQuery || '*'];
+    let countParamIndex = 1;
+
     let countQuery = `
       SELECT COUNT(*) 
       FROM documents d
@@ -132,14 +169,7 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
       WHERE d.status = 'approved' AND d.search_vector @@ query
     `;
 
-    const countParams = [processedQuery || '*'];
-    let countParamIndex = 1;
-
     // Add same filters to count query
-    if (filters.category) {
-      countQuery += ` AND d.category = $${++countParamIndex}`;
-      countParams.push(filters.category);
-    }
     if (filters.subject) {
       countQuery += ` AND d.subject ILIKE $${++countParamIndex}`;
       countParams.push(`%${filters.subject}%`);
@@ -162,6 +192,32 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
     }
     if (filters.verifiedOnly === 'true' || filters.verifiedOnly === true) {
       countQuery += ' AND u.is_verified_author = TRUE';
+    }
+
+    // 🟢 ADDED: TAGS FILTER LOGIC FOR COUNT
+    if (filters.tags) {
+      let tagsArray = [];
+      if (Array.isArray(filters.tags)) {
+        tagsArray = filters.tags;
+      } else if (typeof filters.tags === 'string') {
+        tagsArray = filters.tags.split(',').map(t => t.trim());
+      }
+      tagsArray = tagsArray.filter(t => t.length > 0);
+
+      if (tagsArray.length > 0) {
+        const tagSubConditions = tagsArray.map(() => {
+          countParamIndex++;
+          return `t.tag_name ILIKE $${countParamIndex}`;
+        });
+        
+        tagsArray.forEach(tag => countParams.push(`%${tag}%`));
+
+        countQuery += ` AND EXISTS (
+          SELECT 1 FROM document_tags t 
+          WHERE t.document_id = d.document_id 
+          AND (${tagSubConditions.join(' OR ')})
+        )`;
+      }
     }
 
     const countResult = await query(countQuery, countParams);
@@ -214,7 +270,7 @@ const getPopularSearches = async (limit = 10) => {
       [limit]
     );
 
-    return result.rows;
+    return result.rows.map(row => ({ term: row.term, count: parseInt(row.count) }));
   } catch (error) {
     throw error;
   }
@@ -245,7 +301,7 @@ const searchUsers = async (searchQuery, page = 1, limit = 20) => {
            u.full_name ILIKE $1 OR
            u.university ILIKE $1
          )
-       GROUP BY u.user_id
+       GROUP BY u.user_id, u.username, u.full_name, u.avatar_url, u.bio, u.university, u.is_verified_author
        ORDER BY follower_count DESC, document_count DESC
        LIMIT $2 OFFSET $3`,
       [`%${searchQuery}%`, limit, offset]
@@ -305,13 +361,21 @@ const advancedSearch = async (criteria, page = 1, limit = 20) => {
       queryParams.push(criteria.dateTo);
     }
 
+    // 🟢 UPDATED: Tags logic for partial match
     if (criteria.tags && criteria.tags.length > 0) {
+      let tagsArray = Array.isArray(criteria.tags) ? criteria.tags : [criteria.tags];
+      
+      const tagConditions = tagsArray.map(tag => {
+        paramCount++;
+        queryParams.push(`%${tag}%`);
+        return `dt.tag_name ILIKE $${paramCount}`;
+      });
+
       conditions.push(`EXISTS (
         SELECT 1 FROM document_tags dt 
         WHERE dt.document_id = d.document_id 
-        AND dt.tag_name = ANY($${++paramCount})
+        AND (${tagConditions.join(' OR ')})
       )`);
-      queryParams.push(criteria.tags);
     }
 
     const result = await query(
@@ -335,7 +399,10 @@ const advancedSearch = async (criteria, page = 1, limit = 20) => {
        LIMIT $${++paramCount} OFFSET $${++paramCount}`,
       [...queryParams, limit, offset]
     );
-
+    
+    // Note: To return correct total pages for advanced search, 
+    // you would technically need a count query here too.
+    
     return {
       documents: result.rows,
       page,

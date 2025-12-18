@@ -53,7 +53,7 @@ router.get('/search', optionalAuth, documentController.searchDocuments);
 router.get('/featured', optionalAuth, documentController.getFeaturedDocuments);
 router.get('/recent', optionalAuth, documentController.getRecentDocuments);
 router.get('/popular', optionalAuth, documentController.getPopularDocuments);
-router.get('/tags', documentController.getPopularTags);
+router.get('/suggest-tags', documentController.getSuggestedTags);
 router.get('/:id', optionalAuth, documentIdValidation, documentController.getDocumentById);
 router.get('/:id/preview', optionalAuth, documentIdValidation, documentController.previewDocument);
 

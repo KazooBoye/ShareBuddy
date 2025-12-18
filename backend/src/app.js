@@ -166,13 +166,10 @@ const startServer = async () => {
     await connectDB();
     console.log('✅ Database connected successfully');
     
-    // Initialize moderation queue (optional - continues if Redis unavailable)
-    try {
-      const { initQueue } = require('./services/moderationQueue');
-      await initQueue();
-    } catch (error) {
-      console.log('ℹ️ Moderation queue disabled (Redis not available)');
-    }
+    // Initialize moderation queue
+    const { initQueue } = require('./services/moderationQueue');
+    await initQueue();
+    console.log('✅ Moderation queue initialized');
     
     // Start server
     app.listen(PORT, () => {
@@ -202,23 +199,15 @@ process.on('uncaughtException', (err) => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('👋 SIGTERM received. Shutting down gracefully...');
-  try {
-    const { closeQueue } = require('./services/moderationQueue');
-    await closeQueue();
-  } catch (error) {
-    // Ignore errors during shutdown
-  }
+  const { closeQueue } = require('./services/moderationQueue');
+  await closeQueue();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('👋 SIGINT received. Shutting down gracefully...');
-  try {
-    const { closeQueue } = require('./services/moderationQueue');
-    await closeQueue();
-  } catch (error) {
-    // Ignore errors during shutdown
-  }
+  const { closeQueue } = require('./services/moderationQueue');
+  await closeQueue();
   process.exit(0);
 });
 

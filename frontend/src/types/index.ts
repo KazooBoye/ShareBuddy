@@ -40,6 +40,7 @@ export interface Document {
   status: 'pending' | 'approved' | 'rejected';
   avgRating?: string;
   ratingCount: number;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
   author: {

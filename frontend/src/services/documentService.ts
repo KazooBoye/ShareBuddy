@@ -20,7 +20,12 @@ export const documentService = {
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, value.toString());
+          // Handle array values (like tags)
+          if (Array.isArray(value)) {
+            value.forEach(v => queryParams.append(key, v.toString()));
+          } else {
+            queryParams.append(key, value.toString());
+          }
         }
       });
     }

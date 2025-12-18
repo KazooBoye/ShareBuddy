@@ -21,7 +21,8 @@ const getDocuments = async (req, res, next) => {
       minRating,
       maxCost,
       sortBy = 'created_at',
-      sortOrder = 'DESC'
+      sortOrder = 'DESC',
+      tags
     } = req.query;
 
     // Build WHERE clause dynamically
@@ -31,14 +32,14 @@ const getDocuments = async (req, res, next) => {
 
     if (search) {
       paramCount++;
-      whereConditions.push(`(d.title ILIKE $${paramCount} OR d.description ILIKE $${paramCount})`);
+      whereConditions.push(`d.title ILIKE $${paramCount}`);
       queryParams.push(`%${search}%`);
     }
 
     if (subject) {
       paramCount++;
-      whereConditions.push(`d.subject = $${paramCount}`);
-      queryParams.push(subject);
+      whereConditions.push(`d.subject ILIKE $${paramCount}`);
+      queryParams.push(`%${subject}%`);
     }
 
     if (university) {
@@ -65,6 +66,36 @@ const getDocuments = async (req, res, next) => {
       queryParams.push(parseInt(maxCost));
     }
 
+    // TAGS FILTER (Updated for comma support and partial matching)
+    if (tags) {
+      let tagsArray = [];
+      
+      // Handle array input (?tags=a&tags=b) OR comma-separated string (?tags=a,b)
+      if (Array.isArray(tags)) {
+        tagsArray = tags;
+      } else if (typeof tags === 'string') {
+        // Split by comma and trim whitespace
+        tagsArray = tags.split(',').map(t => t.trim());
+      }
+
+      // Clean up empty strings
+      tagsArray = tagsArray.filter(tag => tag.length > 0);
+
+      if (tagsArray.length > 0) {
+        // Use EXISTS for each tag. 
+        // Logic: Document must match ANY of the provided tags (OR logic).
+        // If you want it to match ALL tags (AND logic), change the .join(' OR ') to .join(' AND ') below.
+        const existsConditions = tagsArray.map((tag) => {
+          paramCount++;
+          queryParams.push(`%${tag}%`); 
+          // ILIKE ensures case-insensitive partial match (e.g., "jav" finds "Java" and "JavaScript")
+          return `EXISTS (SELECT 1 FROM document_tags t WHERE t.document_id = d.document_id AND t.tag_name ILIKE $${paramCount})`;
+        });
+        
+        whereConditions.push(`(${existsConditions.join(' OR ')})`);
+      }
+    }
+
     // Add pagination params
     queryParams.push(limit, offset);
     const limitParam = ++paramCount;
@@ -72,11 +103,31 @@ const getDocuments = async (req, res, next) => {
 
     const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
     
-    // Validate sort parameters
-    const validSortFields = ['created_at', 'title', 'download_count', 'avg_rating', 'credit_cost'];
-    const validSortOrders = ['ASC', 'DESC'];
-    const finalSortBy = validSortFields.includes(sortBy) ? sortBy : 'created_at';
-    const finalSortOrder = validSortOrders.includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
+    // Map frontend sortBy values to backend columns
+    const sortByMapping = {
+      'newest': 'created_at',
+      'oldest': 'created_at',
+      'popular': 'download_count',
+      'rating': 'average_rating',
+      'downloads': 'download_count',
+      'created_at': 'created_at',
+      'title': 'title',
+      'download_count': 'download_count',
+      'avg_rating': 'average_rating',
+      'credit_cost': 'credit_cost'
+    };
+    
+    const sortOrderMapping = {
+      'newest': 'DESC',
+      'oldest': 'ASC',
+      'popular': 'DESC',
+      'rating': 'DESC',
+      'downloads': 'DESC'
+    };
+    
+    const mappedSortBy = sortByMapping[sortBy] || 'created_at';
+    const mappedSortOrder = sortOrderMapping[sortBy] || sortOrder.toUpperCase();
+    const finalSortOrder = ['ASC', 'DESC'].includes(mappedSortOrder) ? mappedSortOrder : 'DESC';
 
     const documentsQuery = `
       SELECT 
@@ -102,11 +153,17 @@ const getDocuments = async (req, res, next) => {
         u.username,
         u.full_name,
         u.avatar_url,
-        u.is_verified_author
+        u.is_verified_author,
+        COALESCE(
+          (SELECT array_agg(tag_name) 
+           FROM document_tags 
+           WHERE document_id = d.document_id), 
+          ARRAY[]::text[]
+        ) as tags
       FROM documents d
       JOIN users u ON d.author_id = u.user_id
       ${whereClause}
-      ORDER BY ${finalSortBy === 'avg_rating' ? 'd.average_rating' : 'd.' + finalSortBy} ${finalSortOrder}
+      ORDER BY ${mappedSortBy === 'average_rating' ? 'd.average_rating' : 'd.' + mappedSortBy} ${finalSortOrder}
       LIMIT $${limitParam} OFFSET $${offsetParam}
     `;
 
@@ -138,6 +195,7 @@ const getDocuments = async (req, res, next) => {
           viewCount: row.view_count,
           avgRating: row.average_rating ? parseFloat(row.average_rating).toFixed(1) : '0.0',
           ratingCount: row.rating_count || 0,
+          tags: row.tags || [],
           createdAt: row.created_at,
           author: {
             id: row.user_id,
@@ -532,6 +590,35 @@ const downloadDocument = async (req, res, next) => {
   }
 };
 
+const getSuggestedTags = async (req, res, next) => {
+  try {
+    const { q } = req.query; // The character(s) typed by user
+
+    if (!q || q.trim().length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Query distinct tags that contain the characters
+    // LIMIT 10 to keep the dropdown/suggestion list manageable
+    const tagQuery = `
+      SELECT DISTINCT tag_name 
+      FROM document_tags 
+      WHERE tag_name ILIKE $1 
+      ORDER BY tag_name ASC 
+      LIMIT 10
+    `;
+
+    const result = await query(tagQuery, [`%${q.trim()}%`]);
+
+    res.json({
+      success: true,
+      data: result.rows.map(row => row.tag_name)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Placeholder functions for other operations
 const updateDocument = async (req, res) => {
   res.status(501).json({
@@ -649,7 +736,7 @@ module.exports = {
   getFeaturedDocuments: getDocuments,
   getRecentDocuments: getDocuments,
   getPopularDocuments: getDocuments,
-  getPopularTags: getDocuments, // Return empty list instead of error
+  getSuggestedTags,
   previewDocument: getDocument,
   incrementView: getDocument, // TODO: Implement view counter
   uploadDocument,

@@ -173,11 +173,28 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
 
         {/* Subject Badge */}
         {doc.subject && (
-          <div className="mb-3">
+          <div className="mb-2">
             <Badge bg="secondary" className="me-2">
               <i className="bi bi-book me-1" />
               {doc.subject}
             </Badge>
+          </div>
+        )}
+
+        {/* Tags */}
+        {doc.tags && doc.tags.length > 0 && (
+          <div className="mb-3 d-flex flex-wrap gap-1">
+            {doc.tags.slice(0, 3).map((tag, index) => (
+              <Badge key={index} bg="info" pill style={{ fontSize: '0.7rem' }}>
+                <i className="bi bi-tag-fill me-1" />
+                {tag}
+              </Badge>
+            ))}
+            {doc.tags.length > 3 && (
+              <Badge bg="light" text="dark" pill style={{ fontSize: '0.7rem' }}>
+                +{doc.tags.length - 3}
+              </Badge>
+            )}
           </div>
         )}
 
