@@ -70,6 +70,12 @@ const DocumentList: React.FC<DocumentListProps> = ({
     const maxCreditCost = searchParams.get('maxCreditCost');
     if (maxCreditCost) filters.maxCreditCost = parseInt(maxCreditCost);
     
+    const tags = searchParams.get('tags');
+    if (tags) {
+      // Parse comma-separated tags from URL
+      filters.tags = tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    }
+    
     return filters;
   }, [searchParams]);
 
@@ -97,7 +103,14 @@ const DocumentList: React.FC<DocumentListProps> = ({
     const newSearchParams = new URLSearchParams();
     Object.entries(updatedFilters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
-        newSearchParams.set(key, value.toString());
+        // Handle array values (like tags)
+        if (Array.isArray(value)) {
+          if (value.length > 0) {
+            newSearchParams.set(key, value.join(','));
+          }
+        } else {
+          newSearchParams.set(key, value.toString());
+        }
       }
     });
     setUrlSearchParams(newSearchParams);
