@@ -153,18 +153,23 @@ const PurchaseCreditsPage: React.FC = () => {
   const fetchPackages = async () => {
     try {
       setLoading(true);
+      setError(''); // Clear previous errors
       const response = await axios.get('/api/payment/packages');
       
-      setPackages(response.data.data.packages);
-      
-      // Initialize Stripe with publishable key
-      if (!stripePromise && response.data.data.publishableKey) {
-        stripePromise = loadStripe(response.data.data.publishableKey);
+      if (response.data && response.data.data) {
+        setPackages(response.data.data.packages || []);
+        
+        // Initialize Stripe with publishable key
+        if (!stripePromise && response.data.data.publishableKey) {
+          stripePromise = loadStripe(response.data.data.publishableKey);
+        }
       }
       
       setLoading(false);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load packages');
+      console.error('Error loading payment packages:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to load packages';
+      setError(`Không thể tải gói credits: ${errorMessage}. Vui lòng thử lại sau hoặc liên hệ quản trị viên.`);
       setLoading(false);
     }
   };
@@ -193,7 +198,19 @@ const PurchaseCreditsPage: React.FC = () => {
   if (error) {
     return (
       <Container className="py-5" style={{ marginTop: '80px' }}>
-        <Alert variant="danger">{error}</Alert>
+        <Alert variant="danger">
+          <Alert.Heading>Lỗi tải trang</Alert.Heading>
+          <p>{error}</p>
+          <hr />
+          <div className="d-flex justify-content-between align-items-center">
+            <Button variant="outline-danger" onClick={() => navigate(-1)}>
+              Quay lại
+            </Button>
+            <Button variant="danger" onClick={fetchPackages}>
+              Thử lại
+            </Button>
+          </div>
+        </Alert>
       </Container>
     );
   }

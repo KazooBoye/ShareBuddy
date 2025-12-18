@@ -7,7 +7,7 @@ import { Container, Row, Col, Card, Button, Form, Tab, Tabs, Badge, Alert, Image
 import { 
   FaEdit, FaSave, FaTimes, FaCamera, FaUniversity, FaGraduationCap, 
   FaCalendarAlt, FaFileAlt, FaDownload, FaStar, 
-  FaUserPlus, FaUserCheck, FaShare, FaCog, FaEye, FaCoins, FaTrophy, FaChartLine 
+  FaUserPlus, FaUserCheck, FaShare, FaCog, FaEye, FaCoins, FaTrophy, FaChartLine, FaUser 
 } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
 import { userService } from '../../services/userService';
@@ -169,12 +169,13 @@ const ProfilePage: React.FC = () => {
               status: doc.status || 'pending'
             })));
 
-            // Update document count in profile stats
+            // Update document count in profile stats - only count approved documents for consistency
+            const approvedCount = docs.filter((doc: any) => doc.status === 'approved').length;
             setProfile(prev => prev ? {
               ...prev,
               stats: {
                 ...prev.stats,
-                documentsUploaded: docs.length
+                documentsUploaded: approvedCount
               }
             } : null);
           }
@@ -375,22 +376,12 @@ const ProfilePage: React.FC = () => {
         <div 
           className="position-relative"
           style={{
-            height: '200px',
+            height: '100px',
             background: `linear-gradient(135deg, #667eea 0%, #764ba2 100%)`,
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
         >
-          {isOwnProfile && (
-            <Button 
-              variant="outline-light" 
-              size="sm" 
-              className="position-absolute top-0 end-0 m-3"
-            >
-              <FaCamera className="me-1" />
-              Đổi ảnh bìa
-            </Button>
-          )}
         </div>
         
         <Card.Body className="pt-0">
@@ -431,27 +422,19 @@ const ProfilePage: React.FC = () => {
                   )}
                 </div>
                 <p className="text-muted mb-2">@{profile.username}</p>
-                <p className="mb-2">{profile.bio}</p>
+
                 <div className="d-flex flex-wrap gap-2 text-muted small">
                   {profile.university && <span><FaUniversity className="me-1" />{profile.university}</span>}
                   {profile.major && <span><FaGraduationCap className="me-1" />{profile.major}</span>}
                   <span><FaCalendarAlt className="me-1" />Tham gia {new Date(profile.joinDate).getFullYear()}</span>
                 </div>
+                <p className="mb-2">{profile.bio}</p>
               </div>
             </Col>
             
             <Col md={3} className="text-end">
               <div style={{ marginTop: '20px' }}>
-                {isOwnProfile ? (
-                  <Button
-                    variant={editMode ? "success" : "outline-primary"}
-                    onClick={editMode ? handleSave : () => setEditMode(true)}
-                    className="me-2"
-                  >
-                    {editMode ? <FaSave className="me-1" /> : <FaEdit className="me-1" />}
-                    {editMode ? 'Lưu' : 'Chỉnh sửa'}
-                  </Button>
-                ) : (
+                {!isOwnProfile && (
                   <>
                     <Button
                       variant={isFollowing ? "success" : "primary"}
@@ -466,80 +449,63 @@ const ProfilePage: React.FC = () => {
                     </Button>
                   </>
                 )}
-                
-                {editMode && (
-                  <Button variant="outline-secondary" onClick={handleCancel} className="ms-2">
-                    <FaTimes className="me-1" />
-                    Hủy
-                  </Button>
-                )}
               </div>
             </Col>
           </Row>
 
-          {/* Stats - Colorful Cards with Icons */}
-          <Row className="mt-4 g-3">
-            <Col xs={6} md={3}>
+          {/* Stats - Compact Single Row */}
+          <Row className="mt-4 g-2">
+            <Col xs={6} lg={2}>
               <Card className="border-0 shadow-sm h-100">
-                <Card.Body className="text-center">
-                  <FaFileAlt size={28} className="text-primary mb-2" />
-                  <h4 className="mb-1">{profile.stats.documentsUploaded}</h4>
-                  <small className="text-muted">Tài liệu</small>
+                <Card.Body className="text-center py-2 px-2">
+                  <FaFileAlt size={20} className="text-primary mb-1" />
+                  <h5 className="mb-0">{profile.stats.documentsUploaded}</h5>
+                  <small className="text-muted" style={{ fontSize: '0.75rem' }}>Tài liệu</small>
                 </Card.Body>
               </Card>
             </Col>
-            <Col xs={6} md={3}>
+            <Col xs={6} lg={2}>
               <Card className="border-0 shadow-sm h-100">
-                <Card.Body className="text-center">
-                  <FaDownload size={28} className="text-success mb-2" />
-                  <h4 className="mb-1">{profile.stats.totalDownloads}</h4>
-                  <small className="text-muted">Lượt tải</small>
+                <Card.Body className="text-center py-2 px-2">
+                  <FaDownload size={20} className="text-success mb-1" />
+                  <h5 className="mb-0">{profile.stats.totalDownloads}</h5>
+                  <small className="text-muted" style={{ fontSize: '0.75rem' }}>Lượt tải</small>
                 </Card.Body>
               </Card>
             </Col>
-            <Col xs={6} md={3}>
+            <Col xs={6} lg={2}>
               <Card className="border-0 shadow-sm h-100">
-                <Card.Body className="text-center">
-                  <FaEye size={28} className="text-info mb-2" />
-                  <h4 className="mb-1">{profile.stats.totalViews}</h4>
-                  <small className="text-muted">Lượt xem</small>
+                <Card.Body className="text-center py-2 px-2">
+                  <FaEye size={20} className="text-info mb-1" />
+                  <h5 className="mb-0">{profile.stats.totalViews}</h5>
+                  <small className="text-muted" style={{ fontSize: '0.75rem' }}>Lượt xem</small>
                 </Card.Body>
               </Card>
             </Col>
-            <Col xs={6} md={3}>
+            <Col xs={6} lg={2}>
               <Card className="border-0 shadow-sm h-100">
-                <Card.Body className="text-center">
-                  <FaStar size={28} className="text-warning mb-2" />
-                  <h4 className="mb-1">{profile.stats.averageRating.toFixed(1)}/5</h4>
-                  <small className="text-muted">Đánh giá</small>
+                <Card.Body className="text-center py-2 px-2">
+                  <FaStar size={20} className="text-warning mb-1" />
+                  <h5 className="mb-0">{profile.stats.averageRating.toFixed(1)}/5</h5>
+                  <small className="text-muted" style={{ fontSize: '0.75rem' }}>Đánh giá</small>
                 </Card.Body>
               </Card>
             </Col>
-          </Row>
-
-          {/* Social Stats */}
-          <Row className="mt-3 g-3">
-            <Col md={6}>
-              <Card className="border-0 shadow-sm">
-                <Card.Body className="d-flex justify-content-around text-center">
-                  <div>
-                    <h5 className="mb-1">{profile.stats.followers}</h5>
-                    <small className="text-muted">Người theo dõi</small>
-                  </div>
-                  <div className="border-start"></div>
-                  <div>
-                    <h5 className="mb-1">{profile.stats.following}</h5>
-                    <small className="text-muted">Đang theo dõi</small>
-                  </div>
+            <Col xs={6} lg={2}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body className="text-center py-2 px-2">
+                  <FaUserPlus size={20} className="text-secondary mb-1" />
+                  <h5 className="mb-0">{profile.stats.followers}/{profile.stats.following}</h5>
+                  <small className="text-muted" style={{ fontSize: '0.75rem' }}>Theo dõi</small>
                 </Card.Body>
               </Card>
             </Col>
-            <Col md={6}>
-              <Card className="border-0 shadow-sm">
-                <Card.Body className="text-center">
-                  <FaCoins size={24} className="text-warning mb-2" />
-                  <h5 className="mb-1">{profile.credits} Credits</h5>
-                  <small className="text-muted">Số dư hiện tại</small>
+            <Col xs={6} lg={2}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body className="text-center py-2 px-2">
+                  <FaCoins size={20} className="text-warning mb-1" />
+                  <h5 className="mb-0">{profile.credits}</h5>
+                  <small className="text-muted" style={{ fontSize: '0.75rem' }}>Credits</small>
                 </Card.Body>
               </Card>
             </Col>
@@ -554,11 +520,31 @@ const ProfilePage: React.FC = () => {
         onSelect={(k) => setActiveTab(k || 'profile')}
         className="mb-4"
       >
-        <Tab eventKey="profile" title="👤 Thông tin">
+        <Tab eventKey="profile" title={
+          <>
+            <FaUser className="me-2" />
+            <span className="d-none d-md-inline">Thông tin</span>
+          </>
+        }>
           {editMode ? (
             <Card>
-              <Card.Header>
+              <Card.Header className="d-flex justify-content-between align-items-center">
                 <h6 className="mb-0">Chỉnh sửa thông tin cá nhân</h6>
+                <div>
+                  <Button
+                    variant="success"
+                    size="sm"
+                    onClick={handleSave}
+                    className="me-2"
+                  >
+                    <FaSave className="me-1" />
+                    Lưu
+                  </Button>
+                  <Button variant="outline-secondary" size="sm" onClick={handleCancel}>
+                    <FaTimes className="me-1" />
+                    Hủy
+                  </Button>
+                </div>
               </Card.Header>
               <Card.Body>
                 <Form>
@@ -574,19 +560,34 @@ const ProfilePage: React.FC = () => {
                         />
                       </Form.Group>
                     </Col>
+                    
                     <Col md={6}>
                       <Form.Group className="mb-3">
-                        <Form.Label>Tên đăng nhập *</Form.Label>
+                        <Form.Label>Trường đại học</Form.Label>
                         <Form.Control
                           type="text"
-                          name="username"
-                          value={editForm.username}
+                          name="university"
+                          value={editForm.university}
                           onChange={handleInputChange}
                         />
                       </Form.Group>
                     </Col>
                   </Row>
                   
+                  <Row>
+                    <Col>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Chuyên ngành</Form.Label>
+                        <Form.Control
+                          type="text"
+                          name="major"
+                          value={editForm.major}
+                          onChange={handleInputChange}
+                        />
+                      </Form.Group>
+                    </Col>
+                  </Row>
+
                   <Form.Group className="mb-3">
                     <Form.Label>Giới thiệu bản thân</Form.Label>
                     <Form.Control
@@ -599,37 +600,23 @@ const ProfilePage: React.FC = () => {
                     />
                   </Form.Group>
 
-                  <Row>
-                    <Col md={6}>
-                      <Form.Group className="mb-3">
-                        <Form.Label>Trường đại học</Form.Label>
-                        <Form.Control
-                          type="text"
-                          name="university"
-                          value={editForm.university}
-                          onChange={handleInputChange}
-                        />
-                      </Form.Group>
-                    </Col>
-                    <Col md={6}>
-                      <Form.Group className="mb-3">
-                        <Form.Label>Chuyên ngành</Form.Label>
-                        <Form.Control
-                          type="text"
-                          name="major"
-                          value={editForm.major}
-                          onChange={handleInputChange}
-                        />
-                      </Form.Group>
-                    </Col>
-                  </Row>
                 </Form>
               </Card.Body>
             </Card>
           ) : (
             <Card>
-              <Card.Header>
+              <Card.Header className="d-flex justify-content-between align-items-center">
                 <h6 className="mb-0">Thông tin cá nhân</h6>
+                {isOwnProfile && (
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    onClick={() => setEditMode(true)}
+                  >
+                    <FaEdit className="me-1" />
+                    Chỉnh sửa
+                  </Button>
+                )}
               </Card.Header>
               <Card.Body>
                 <Row>
@@ -669,7 +656,12 @@ const ProfilePage: React.FC = () => {
           )}
         </Tab>
 
-        <Tab eventKey="documents" title="📚 Tài liệu">
+        <Tab eventKey="documents" title={
+          <>
+            <FaFileAlt className="me-2" />
+            <span className="d-none d-md-inline">Tài liệu</span>
+          </>
+        }>
           <Card>
             <Card.Header className="d-flex justify-content-between align-items-center">
               <h6 className="mb-0">Tài liệu đã tải lên ({userDocuments.length})</h6>
@@ -762,7 +754,45 @@ const ProfilePage: React.FC = () => {
         </Tab>
 
         {isOwnProfile && (
-          <Tab eventKey="credits" title="💰 Lịch sử Credits">
+          <Tab eventKey="credits" title={
+            <>
+              <FaCoins className="me-2" />
+              <span className="d-none d-md-inline">Lịch sử Credits</span>
+            </>
+          }>
+
+            {/* How to earn credits info */}
+            <Card className="mt-4">
+              <Card.Header>
+                <h6 className="mb-0">💡 Cách kiếm Credits</h6>
+              </Card.Header>
+              <Card.Body>
+                <Row>
+                  <Col md={4} className="text-center mb-3">
+                    <FaFileAlt size={20} className="text-primary mb-2" />
+                    <h6>Tải lên tài liệu</h6>
+                    <p className="text-muted small mb-0">Mỗi tài liệu được duyệt: +1 credits</p>
+                  </Col>
+                  <Col md={4} className="text-center mb-3">
+                    <FaDownload size={20} className="text-success mb-2" />
+                    <h6>Tài liệu được tải</h6>
+                    <p className="text-muted small mb-0">Mỗi tài liệu được tải: +credits</p>
+                  </Col>
+                  <Col md={4} className="text-center mb-3">
+                    <FaStar size={20} className="text-warning mb-2" />
+                    <h6>Đánh giá cao</h6>
+                    <p className="text-muted small mb-0">Mỗi đánh giá 5 sao: +2 credits</p>
+                  </Col>
+                </Row>
+                <div className="text-center mt-3">
+                  <Button variant="primary" onClick={() => navigate('/purchase-credits')}>
+                    <FaCoins className="me-2" />
+                    Mua thêm Credits
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+
             <Card>
               <Card.Header>
                 <h6 className="mb-0 d-flex align-items-center justify-content-between">
@@ -823,53 +853,21 @@ const ProfilePage: React.FC = () => {
                 )}
               </Card.Body>
             </Card>
-
-            {/* How to earn credits info */}
-            <Card className="mt-4">
-              <Card.Header>
-                <h6 className="mb-0">💡 Cách kiếm Credits</h6>
-              </Card.Header>
-              <Card.Body>
-                <Row>
-                  <Col md={4} className="text-center mb-3">
-                    <FaFileAlt size={32} className="text-primary mb-2" />
-                    <h6>Tải lên tài liệu</h6>
-                    <p className="text-muted small mb-0">Mỗi tài liệu được duyệt: +5 credits</p>
-                  </Col>
-                  <Col md={4} className="text-center mb-3">
-                    <FaDownload size={32} className="text-success mb-2" />
-                    <h6>Tài liệu được tải</h6>
-                    <p className="text-muted small mb-0">Mỗi lượt tải: +1 credit</p>
-                  </Col>
-                  <Col md={4} className="text-center mb-3">
-                    <FaStar size={32} className="text-warning mb-2" />
-                    <h6>Đánh giá cao</h6>
-                    <p className="text-muted small mb-0">Đánh giá 5 sao: +2 credits</p>
-                  </Col>
-                </Row>
-                <div className="text-center mt-3">
-                  <Button variant="primary" onClick={() => navigate('/purchase-credits')}>
-                    <FaCoins className="me-2" />
-                    Mua thêm Credits
-                  </Button>
-                </div>
-              </Card.Body>
-            </Card>
           </Tab>
         )}
 
         {isOwnProfile && (
-          <Tab eventKey="settings" title="⚙️ Cài đặt">
+          <Tab eventKey="settings" title={
+            <>
+              <FaCog className="me-2" />
+              <span className="d-none d-md-inline">Cài đặt</span>
+            </>
+          }>
             <Card>
               <Card.Header>
                 <h6 className="mb-0">Cài đặt tài khoản</h6>
               </Card.Header>
               <Card.Body>
-                <Alert variant="info">
-                  <FaCog className="me-2" />
-                  Các tùy chọn cài đặt nâng cao sẽ được bổ sung trong phiên bản tiếp theo.
-                </Alert>
-                
                 <div className="d-flex justify-content-between align-items-center py-2 border-bottom">
                   <div>
                     <strong>Thông báo email</strong>

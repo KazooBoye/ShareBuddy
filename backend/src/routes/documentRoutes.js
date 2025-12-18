@@ -49,6 +49,7 @@ const commentValidation = [
 
 // Public routes
 router.get('/', optionalAuth, documentController.getDocuments);
+router.get('/bookmarks', protect, documentController.getUserBookmarks);
 router.get('/search', optionalAuth, documentController.searchDocuments);
 router.get('/featured', optionalAuth, documentController.getFeaturedDocuments);
 router.get('/recent', optionalAuth, documentController.getRecentDocuments);

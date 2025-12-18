@@ -37,6 +37,7 @@ import VerifiedAuthorRequestPage from './pages/VerifiedAuthorRequestPage';
 import PurchaseCreditsPage from './pages/PurchaseCreditsPage';
 import PaymentHistoryPage from './pages/PaymentHistoryPage';
 import SearchPage from './pages/SearchPage';
+import BookmarkedDocumentsPage from './pages/BookmarkedDocumentsPage';
 
 // Styles
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -77,6 +78,7 @@ const AppContent: React.FC = () => {
               <Route path="/" element={<HomePage />} />
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/documents/:id" element={<DocumentDetailPage />} />
+              <Route path="/bookmarked" element={<BookmarkedDocumentsPage />} />
               <Route path="/questions/:questionId" element={<QuestionDetailPage />} />
               <Route path="/verified-authors" element={<VerifiedAuthorsPage />} />
               <Route path="/search" element={<SearchPage />} />

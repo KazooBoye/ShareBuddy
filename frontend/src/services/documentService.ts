@@ -84,8 +84,26 @@ export const documentService = {
   },
 
   // Get user's bookmarked documents
-  getBookmarkedDocuments: async (): Promise<ApiResponse<PaginatedResponse<Document>>> => {
-    return apiRequest('GET', 'documents/bookmarks');
+  getBookmarkedDocuments: async (params?: DocumentSearchParams): Promise<ApiResponse<PaginatedResponse<Document>>> => {
+    const queryParams = new URLSearchParams();
+    
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          // Handle array values (like tags)
+          if (Array.isArray(value)) {
+            value.forEach(v => queryParams.append(key, v.toString()));
+          } else {
+            queryParams.append(key, value.toString());
+          }
+        }
+      });
+    }
+    
+    const query = queryParams.toString();
+    const url = query ? `documents/bookmarks?${query}` : 'documents/bookmarks';
+    
+    return apiRequest('GET', url);
   },
 
   // Get user's uploaded documents

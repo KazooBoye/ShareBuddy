@@ -20,6 +20,9 @@ const getDocuments = async (req, res, next) => {
       major,
       minRating,
       maxCost,
+      verifiedAuthor,
+      year,
+      authorId,
       sortBy = 'created_at',
       sortOrder = 'DESC',
       tags
@@ -64,6 +67,22 @@ const getDocuments = async (req, res, next) => {
       paramCount++;
       whereConditions.push(`d.credit_cost <= $${paramCount}`);
       queryParams.push(parseInt(maxCost));
+    }
+
+    if (verifiedAuthor === 'true' || verifiedAuthor === true) {
+      whereConditions.push(`u.is_verified_author = true`);
+    }
+
+    if (year) {
+      paramCount++;
+      whereConditions.push(`EXTRACT(YEAR FROM d.created_at) = $${paramCount}`);
+      queryParams.push(parseInt(year));
+    }
+
+    if (authorId) {
+      paramCount++;
+      whereConditions.push(`d.author_id = $${paramCount}`);
+      queryParams.push(authorId);
     }
 
     // TAGS FILTER (Updated for comma support and partial matching)
@@ -729,6 +748,234 @@ const reportDocument = async (req, res) => {
   });
 };
 
+// Get user's bookmarked documents
+const getUserBookmarks = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 12;
+    const offset = (page - 1) * limit;
+    
+    const {
+      search,
+      subject,
+      minRating,
+      maxCost,
+      verifiedAuthor,
+      year,
+      sortBy = 'created_at',
+      sortOrder = 'DESC',
+      tags
+    } = req.query;
+
+    // Debug log
+    console.log('📝 getUserBookmarks query params:', {
+      search,
+      subject,
+      minRating,
+      maxCost,
+      verifiedAuthor,
+      year,
+      sortBy,
+      tags,
+      allQueryParams: req.query
+    });
+
+    // Build WHERE clause dynamically
+    let whereConditions = ["d.status = 'approved'", "b.user_id = $1"];
+    let queryParams = [userId];
+    let paramCount = 1;
+
+    if (search) {
+      paramCount++;
+      // Search in title, description, and subject
+      whereConditions.push(`(d.title ILIKE $${paramCount} OR d.description ILIKE $${paramCount} OR d.subject ILIKE $${paramCount})`);
+      queryParams.push(`%${search}%`);
+      console.log('🔍 Adding search filter:', search);
+    }
+
+    if (subject) {
+      paramCount++;
+      whereConditions.push(`d.subject ILIKE $${paramCount}`);
+      queryParams.push(`%${subject}%`);
+    }
+
+    if (minRating) {
+      paramCount++;
+      whereConditions.push(`d.average_rating >= $${paramCount}`);
+      queryParams.push(parseFloat(minRating));
+    }
+
+    if (maxCost) {
+      paramCount++;
+      whereConditions.push(`d.credit_cost <= $${paramCount}`);
+      queryParams.push(parseInt(maxCost));
+    }
+
+    if (verifiedAuthor === 'true' || verifiedAuthor === true) {
+      whereConditions.push(`u.is_verified_author = true`);
+    }
+
+    if (year) {
+      paramCount++;
+      whereConditions.push(`EXTRACT(YEAR FROM d.created_at) = $${paramCount}`);
+      queryParams.push(parseInt(year));
+    }
+
+    // TAGS FILTER
+    if (tags) {
+      let tagsArray = [];
+      
+      if (Array.isArray(tags)) {
+        tagsArray = tags;
+      } else if (typeof tags === 'string') {
+        tagsArray = tags.split(',').map(t => t.trim());
+      }
+
+      tagsArray = tagsArray.filter(tag => tag.length > 0);
+
+      if (tagsArray.length > 0) {
+        const existsConditions = tagsArray.map((tag) => {
+          paramCount++;
+          queryParams.push(`%${tag}%`);
+          return `EXISTS (SELECT 1 FROM document_tags t WHERE t.document_id = d.document_id AND t.tag_name ILIKE $${paramCount})`;
+        });
+        
+        whereConditions.push(`(${existsConditions.join(' OR ')})`);
+      }
+    }
+
+    // Add pagination params
+    queryParams.push(limit, offset);
+    const limitParam = ++paramCount;
+    const offsetParam = ++paramCount;
+
+    const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
+    
+    console.log('🔍 Final WHERE clause:', whereClause);
+    console.log('🔍 Query params:', queryParams);
+    
+    // Map frontend sortBy values to backend columns
+    const sortByMapping = {
+      'newest': 'b.created_at',
+      'oldest': 'b.created_at',
+      'popular': 'download_count',
+      'rating': 'average_rating',
+      'downloads': 'download_count',
+      'created_at': 'b.created_at',
+      'title': 'title',
+      'download_count': 'download_count',
+      'avg_rating': 'average_rating',
+      'credit_cost': 'credit_cost'
+    };
+    
+    const sortOrderMapping = {
+      'newest': 'DESC',
+      'oldest': 'ASC',
+      'popular': 'DESC',
+      'rating': 'DESC',
+      'downloads': 'DESC'
+    };
+    
+    const mappedSortBy = sortByMapping[sortBy] || 'b.created_at';
+    const mappedSortOrder = sortOrderMapping[sortBy] || sortOrder.toUpperCase();
+    const finalSortOrder = ['ASC', 'DESC'].includes(mappedSortOrder) ? mappedSortOrder : 'DESC';
+
+    const documentsQuery = `
+      SELECT 
+        d.document_id,
+        d.title,
+        d.description,
+        d.file_name,
+        d.file_size,
+        d.file_type,
+        d.university,
+        d.subject,
+        d.download_count,
+        d.view_count,
+        d.credit_cost,
+        d.is_public,
+        d.is_premium,
+        d.status,
+        d.average_rating,
+        d.rating_count,
+        d.created_at,
+        d.updated_at,
+        u.user_id,
+        u.username,
+        u.full_name,
+        u.avatar_url,
+        u.is_verified_author,
+        b.created_at as bookmarked_at,
+        COALESCE(
+          (SELECT array_agg(tag_name) 
+           FROM document_tags 
+           WHERE document_id = d.document_id), 
+          ARRAY[]::text[]
+        ) as tags
+      FROM bookmarks b
+      JOIN documents d ON b.document_id = d.document_id
+      JOIN users u ON d.author_id = u.user_id
+      ${whereClause}
+      ORDER BY ${mappedSortBy} ${finalSortOrder}
+      LIMIT $${limitParam} OFFSET $${offsetParam}
+    `;
+
+    const result = await query(documentsQuery, queryParams);
+
+    // Get total count for pagination
+    const countQuery = `
+      SELECT COUNT(DISTINCT d.document_id) as total
+      FROM bookmarks b
+      JOIN documents d ON b.document_id = d.document_id
+      JOIN users u ON d.author_id = u.user_id
+      ${whereClause}
+    `;
+
+    const countResult = await query(countQuery, queryParams.slice(0, -2)); // Remove limit and offset
+    const total = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      data: {
+        items: result.rows.map(row => ({
+          id: row.document_id,
+          title: row.title,
+          description: row.description,
+          subject: row.subject,
+          university: row.university,
+          creditCost: row.credit_cost,
+          downloadCount: row.download_count,
+          viewCount: row.view_count,
+          avgRating: row.average_rating ? parseFloat(row.average_rating).toFixed(1) : '0.0',
+          ratingCount: row.rating_count || 0,
+          tags: row.tags || [],
+          createdAt: row.created_at,
+          author: {
+            id: row.user_id,
+            username: row.username,
+            fullName: row.full_name,
+            avatarUrl: row.avatar_url,
+            isVerifiedAuthor: row.is_verified_author
+          },
+          userInteraction: {
+            isBookmarked: true,
+            canDownload: true
+          }
+        })),
+        page,
+        totalPages,
+        totalItems: total,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getDocuments,
   getDocumentById: getDocument,
@@ -755,7 +1002,7 @@ module.exports = {
   unlikeComment: deleteDocument,
   bookmarkDocument,
   removeBookmark,
-  getUserBookmarks: getDocuments,
+  getUserBookmarks,
   reportDocument,
   getDocumentAnalytics: getDocument // TODO: Implement analytics
 };

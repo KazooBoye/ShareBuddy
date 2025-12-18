@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Row, Col, Form, Button, Badge, ListGroup, Spinner } from 'react-bootstrap';
+import { FaStar, FaRegStar } from 'react-icons/fa';
 import { DocumentSearchParams } from '../../types';
 import debounce from 'lodash/debounce';
 
@@ -21,9 +22,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
 }) => {
   // Main Filter State
   const [filters, setFilters] = useState<DocumentSearchParams>(initialFilters);
-  const [localSearch, setLocalSearch] = useState(initialFilters.search || '');
   const [localSubject, setLocalSubject] = useState(initialFilters.subject || '');
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Tag Input Specific State
   const [tagInput, setTagInput] = useState('');
@@ -55,7 +54,6 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
   };
 
   const handleTextInputChange = (key: keyof DocumentSearchParams, value: string) => {
-    if (key === 'search') setLocalSearch(value);
     if (key === 'subject') setLocalSubject(value);
     debouncedFilterChange(key, value || undefined);
   };
@@ -73,7 +71,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.subject || filters.minRating || filters.maxCreditCost || (filters.tags && filters.tags.length > 0));
+    return !!(filters.subject || filters.minRating || filters.maxCreditCost || filters.verifiedAuthor || filters.year || (filters.tags && filters.tags.length > 0));
   };
 
   // --------------------------------------------------------------------------
@@ -176,100 +174,90 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
   return (
     <div className="search-filters">
       <Row className="g-3">
-        {/* Search Input */}
-        <Col xs={12} md={compact ? 12 : 6}>
-          <Form.Label>Tìm kiếm</Form.Label>
-          <Form.Control
-            type="text"
-            placeholder="Tìm tài liệu..."
-            value={localSearch}
-            onChange={(e) => handleTextInputChange('search', e.target.value)}
-          />
-        </Col>
-
         {/* Subject Filter */}
-        <Col xs={12} sm={6} md={compact ? 6 : 4}>
+        <Col xs={12}>
           <Form.Label>Môn học</Form.Label>
           <Form.Control
             type="text"
-            placeholder="VD: Toán, Vật lý..."
+            placeholder="Nhập môn học..."
             value={localSubject}
             onChange={(e) => handleTextInputChange('subject', e.target.value)}
           />
         </Col>
 
-        {/* Action Buttons */}
-        <Col xs={12} sm={6} md={compact ? 12 : 2}>
-          <Form.Label className="d-none d-md-block">&nbsp;</Form.Label>
-          <div className="d-flex gap-2 flex-wrap">
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-            >
-              <i className={`bi bi-chevron-${showAdvanced ? 'up' : 'down'}`} />
-              {compact ? '' : ' Nâng cao'}
-            </Button>
-            
-            {hasActiveFilters() && (
+        {/* Star Rating Filter */}
+        <Col xs={12}>
+          <Form.Label>Đánh giá tối thiểu</Form.Label>
+          <div className="d-flex align-items-center gap-2">
+            <div className="d-flex gap-1" style={{ fontSize: '1.5rem' }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <div
+                  key={star}
+                  onClick={() => handleFilterChange('minRating', filters.minRating === star ? undefined : star)}
+                  style={{ cursor: 'pointer' }}
+                  title={`${star} sao`}
+                >
+                  {filters.minRating && star <= filters.minRating ? (
+                    <FaStar className="text-warning" />
+                  ) : (
+                    <FaRegStar className="text-muted" />
+                  )}
+                </div>
+              ))}
+            </div>
+            {filters.minRating && (
               <Button
-                variant="outline-danger"
+                variant="link"
                 size="sm"
-                onClick={clearFilters}
+                className="p-0 text-muted"
+                style={{ fontSize: '0.875rem' }}
+                onClick={() => handleFilterChange('minRating', undefined)}
               >
-                <i className="bi bi-x-circle" />
-                {compact ? '' : ' Xóa bộ lọc'}
+                Xóa
               </Button>
             )}
           </div>
         </Col>
-      </Row>
 
-      {/* Advanced Filters */}
-      {showAdvanced && (
-        <Row className="mt-3 pt-3 border-top">
-          {/* Rating Filter */}
-          <Col md={4} className="mb-3">
-            <Form.Label>Đánh giá tối thiểu</Form.Label>
-            <Form.Select
-              value={filters.minRating || ''}
-              onChange={(e) => handleFilterChange('minRating', e.target.value ? parseInt(e.target.value) : undefined)}
-            >
-              <option value="">Tất cả</option>
-              <option value="1">⭐ 1 sao trở lên</option>
-              <option value="2">⭐ 2 sao trở lên</option>
-              <option value="3">⭐ 3 sao trở lên</option>
-              <option value="4">⭐ 4 sao trở lên</option>
-              <option value="5">⭐ 5 sao</option>
-            </Form.Select>
-          </Col>
+        {/* Credit Cost Filter */}
+        <Col xs={12}>
+          <Form.Label>Chi phí tải xuống</Form.Label>
+          <Form.Control
+            type="number"
+            min="0"
+            placeholder="Nhập số credits tối đa..."
+            value={filters.maxCreditCost || ''}
+            onChange={(e) => handleFilterChange('maxCreditCost', e.target.value ? parseInt(e.target.value) : undefined)}
+          />
+        </Col>
 
-          {/* Credit Cost Filter */}
-          <Col md={4} className="mb-3">
-            <Form.Label>Chi phí tối đa (Credits)</Form.Label>
-            <Form.Control
-              type="number"
-              min="0"
-              placeholder="Nhập số credits..."
-              value={filters.maxCreditCost || ''}
-              onChange={(e) => handleFilterChange('maxCreditCost', e.target.value ? parseInt(e.target.value) : undefined)}
-            />
-          </Col>
+        {/* Verified Author Checkbox */}
+        <Col xs={12}>
+          <Form.Check
+            type="checkbox"
+            label="Từ Verified Author"
+            checked={filters.verifiedAuthor || false}
+            onChange={(e) => handleFilterChange('verifiedAuthor', e.target.checked || undefined)}
+          />
+        </Col>
 
-          {/* Sort By */}
-          <Col md={4} className="mb-3">
-            <Form.Label>Sắp xếp theo</Form.Label>
-            <Form.Select
-              value={filters.sortBy || 'newest'}
-              onChange={(e) => handleFilterChange('sortBy', e.target.value as any)}
-            >
-              <option value="newest">Mới nhất</option>
-              <option value="oldest">Cũ nhất</option>
-              <option value="popular">Phổ biến nhất</option>
-              <option value="rating">Đánh giá cao nhất</option>
-              <option value="downloads">Tải nhiều nhất</option>
-            </Form.Select>
-          </Col>
+        {/* Upload Year Filter */}
+        <Col xs={12}>
+          <Form.Label>Thời gian đăng tải</Form.Label>
+          <Form.Select
+            value={filters.year || ''}
+            onChange={(e) => handleFilterChange('year', e.target.value ? parseInt(e.target.value) : undefined)}
+          >
+            <option value="">Tất cả</option>
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+            <option value="2022">2022</option>
+            <option value="2021">2021</option>
+            <option value="2020">2020</option>
+            <option value="2019">2019</option>
+            <option value="2018">2018</option>
+          </Form.Select>
+        </Col>
 
           {/* Tag Filter - INTERACTIVE */}
           <Col md={12} className="mb-3">
@@ -335,7 +323,6 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
             </Form.Text>
           </Col>
         </Row>
-      )}
 
       {/* Active Filters Display */}
       {hasActiveFilters() && (
@@ -386,11 +373,34 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
                 </Badge>
               )}
               
-              {/* Also show tags here in the summary list if you want, 
-                  though they are already visible in the input box above. 
-                  If you want to hide them from this summary list since they are in the input,
-                  you can remove this block.
-              */}
+              {filters.verifiedAuthor && (
+                <Badge bg="primary" className="me-1 mb-1">
+                  Verified Author
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="p-0 ms-1 text-white"
+                    onClick={() => handleFilterChange('verifiedAuthor', undefined)}
+                  >
+                    <i className="bi bi-x" />
+                  </Button>
+                </Badge>
+              )}
+              
+              {filters.year && (
+                <Badge bg="dark" className="me-1 mb-1">
+                  Năm {filters.year}
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="p-0 ms-1 text-white"
+                    onClick={() => handleFilterChange('year', undefined)}
+                  >
+                    <i className="bi bi-x" />
+                  </Button>
+                </Badge>
+              )}
+              
               {filters.tags?.map((tag, index) => (
                 <Badge key={index} bg="secondary" className="me-1 mb-1">
                   Tag: {tag}

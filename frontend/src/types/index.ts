@@ -271,6 +271,8 @@ export interface DocumentSearchParams {
   subject?: string;
   minRating?: number;
   maxCreditCost?: number;
+  verifiedAuthor?: boolean;
+  year?: number;
   sortBy?: 'newest' | 'oldest' | 'popular' | 'rating' | 'downloads';
   sortOrder?: 'asc' | 'desc';
   page?: number;

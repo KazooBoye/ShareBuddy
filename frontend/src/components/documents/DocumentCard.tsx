@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Card, Badge, Button, Row, Col, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Card, Badge, Button, Row, Col, OverlayTrigger, Tooltip, Modal } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { Document } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
@@ -19,6 +19,7 @@ interface DocumentCardProps {
   compact?: boolean;
   onBookmark?: (documentId: string) => void;
   onDownload?: (documentId: string) => void;
+  onAuthorClick?: (authorId: string) => void;
   className?: string;
 }
 
@@ -27,12 +28,14 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
   showAuthor = true,
   compact = false,
   onBookmark, 
-  onDownload, 
+  onDownload,
+  onAuthorClick,
   className 
 }) => {
   const { isAuthenticated, user } = useAuth();
   const dispatch = useAppDispatch();
   const [isDownloading, setIsDownloading] = useState(false);
+  const [showUnbookmarkModal, setShowUnbookmarkModal] = useState(false);
 
   const handleBookmark = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -42,6 +45,18 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
       toast.error('Vui lòng đăng nhập để bookmark tài liệu');
       return;
     }
+
+    // If already bookmarked, show confirmation modal
+    if (doc.userInteraction?.isBookmarked) {
+      setShowUnbookmarkModal(true);
+      return;
+    }
+
+    // Add bookmark directly
+    performBookmarkToggle();
+  };
+
+  const performBookmarkToggle = async () => {
 
     try {
       await dispatch(toggleBookmark({
@@ -99,6 +114,14 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
       toast.error('Có lỗi xảy ra khi tải xuống');
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleAuthorClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onAuthorClick && doc.author) {
+      onAuthorClick(doc.author.id);
     }
   };
 
@@ -205,11 +228,22 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
               src={doc.author.avatarUrl || '/default-avatar.png'}
               alt="Author"
               className="user-avatar-sm rounded-circle me-2"
-              style={{ width: '32px', height: '32px', objectFit: 'cover' }}
+              style={{ width: '32px', height: '32px', objectFit: 'cover', cursor: 'pointer' }}
+              onClick={handleAuthorClick}
             />
             <div className="flex-grow-1" style={{ minWidth: 0 }}>
               <div className="d-flex align-items-center">
-                <small className="text-muted fw-medium text-truncate" style={{ fontSize: '0.8125rem' }}>
+                <small 
+                  className="text-muted fw-medium text-truncate" 
+                  style={{ 
+                    fontSize: '0.8125rem',
+                    cursor: 'pointer',
+                    textDecoration: 'none'
+                  }}
+                  onClick={handleAuthorClick}
+                  onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                  onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                >
                   {doc.author.fullName || doc.author.username}
                 </small>
                 {doc.author.isVerifiedAuthor && (
@@ -221,61 +255,119 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
         )}
 
         {/* Stats Row */}
-        <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-          <div className="d-flex align-items-center">
-            {renderRating()}
-          </div>
-          <div className="d-flex align-items-center gap-2">
-            <small className="text-muted d-flex align-items-center">
-              <i className="bi bi-download me-1" />
-              {doc.downloadCount || 0}
-            </small>
-            <Badge bg="success" pill>
-              {doc.creditCost} <i className="bi bi-coin" />
-            </Badge>
-          </div>
+        <div className="d-flex align-items-center mb-3">
+          {renderRating()}
         </div>
 
-        {/* Footer Actions */}
-        <div className="d-flex justify-content-end gap-2 mt-auto">
-          <div className="btn-group" role="group">
-              {/* Bookmark Button */}
-              <OverlayTrigger
-                placement="top"
-                overlay={<Tooltip>
-                  {doc.userInteraction?.isBookmarked ? 'Bỏ bookmark' : 'Bookmark'}
-                </Tooltip>}
+        {/* Upload Time and Actions Row */}
+        <div className="d-flex align-items-center justify-content-between mb-2 gap-3">
+          <small className="text-muted fst-italic" style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+            {new Date(doc.createdAt).toLocaleDateString('vi-VN', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })}
+          </small>
+          
+          {/* Action Buttons */}
+          <div className="d-flex align-items-center gap-2">
+            {/* Bookmark Button */}
+            <OverlayTrigger
+              placement="top"
+              overlay={<Tooltip>
+                {doc.userInteraction?.isBookmarked ? 'Bỏ bookmark' : 'Bookmark'}
+              </Tooltip>}
+            >
+              <Button
+                variant={doc.userInteraction?.isBookmarked ? 'warning' : 'outline-warning'}
+                size="sm"
+                onClick={handleBookmark}
+                className="rounded-circle"
+                style={{ width: '32px', height: '32px', padding: 0 }}
               >
-                <Button
-                  variant={doc.userInteraction?.isBookmarked ? 'warning' : 'outline-warning'}
-                  size="sm"
-                  onClick={handleBookmark}
-                >
-                  <i className={`bi bi-bookmark${doc.userInteraction?.isBookmarked ? '-fill' : ''}`} />
-                </Button>
-              </OverlayTrigger>
+                <i className={`bi bi-bookmark${doc.userInteraction?.isBookmarked ? '-fill' : ''}`} />
+              </Button>
+            </OverlayTrigger>
 
-              {/* Download Button */}
-              <OverlayTrigger
-                placement="top"
-                overlay={<Tooltip>Tải xuống</Tooltip>}
+            {/* Download Button with Info */}
+            <OverlayTrigger
+              placement="top"
+              overlay={<Tooltip>Tải xuống - {doc.creditCost} credits</Tooltip>}
+            >
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleDownload}
+                disabled={isDownloading || !doc.userInteraction?.canDownload}
+                className="d-flex align-items-center gap-1 px-3"
+                style={{ 
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none',
+                  fontWeight: '500'
+                }}
               >
-                <Button
-                  variant="outline-primary"
-                  size="sm"
-                  onClick={handleDownload}
-                  disabled={isDownloading || !doc.userInteraction?.canDownload}
-                >
-                  {isDownloading ? (
-                    <div className="spinner-border spinner-border-sm" />
-                  ) : (
+                {isDownloading ? (
+                  <div className="spinner-border spinner-border-sm" />
+                ) : (
+                  <>
                     <i className="bi bi-download" />
-                  )}
-                </Button>
-              </OverlayTrigger>
-            </div>
+                    <span style={{ fontSize: '0.75rem' }}>{doc.downloadCount || 0}</span>
+                    <span className="mx-1">•</span>
+                    <span style={{ fontSize: '0.75rem' }}>{doc.creditCost}</span>
+                    <i className="bi bi-coin" style={{ fontSize: '0.75rem' }} />
+                  </>
+                )}
+              </Button>
+            </OverlayTrigger>
+          </div>
         </div>
       </Card.Body>
+
+      {/* Unbookmark Confirmation Modal */}
+      <Modal
+        show={showUnbookmarkModal}
+        onHide={() => setShowUnbookmarkModal(false)}
+        backdrop="static"
+        centered
+        style={{ zIndex: 9999 }}
+      >
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 9998
+          }}
+          onClick={() => setShowUnbookmarkModal(false)}
+        />
+        <Modal.Header closeButton style={{ position: 'relative', zIndex: 9999 }}>
+          <Modal.Title>Xác nhận</Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ position: 'relative', zIndex: 9999 }}>
+          <p>Bỏ bookmark cho <strong>{doc.title}</strong>?</p>
+        </Modal.Body>
+        <Modal.Footer style={{ position: 'relative', zIndex: 9999 }}>
+          <Button 
+            variant="secondary" 
+            onClick={() => setShowUnbookmarkModal(false)}
+          >
+            Hủy
+          </Button>
+          <Button 
+            variant="warning" 
+            onClick={() => {
+              setShowUnbookmarkModal(false);
+              performBookmarkToggle();
+            }}
+          >
+            Bỏ bookmark
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Card>
   );
 };

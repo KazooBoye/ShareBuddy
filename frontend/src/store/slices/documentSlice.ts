@@ -109,12 +109,25 @@ export const fetchRecentDocuments = createAsyncThunk(
   }
 );
 
+export const fetchBookmarkedDocuments = createAsyncThunk(
+  'documents/fetchBookmarkedDocuments',
+  async (params: DocumentSearchParams | undefined, { rejectWithValue }) => {
+    try {
+      const response = await documentService.getBookmarkedDocuments(params);
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Không thể tải tài liệu đã lưu');
+    }
+  }
+);
+
 // Document slice
 interface DocumentState {
   documents: Document[];
   currentDocument: Document | null;
   popularDocuments: Document[];
   recentDocuments: Document[];
+  bookmarkedDocuments: Document[];
   searchResults: Document[];
   pagination: {
     currentPage: number;
@@ -137,6 +150,7 @@ const initialState: DocumentState = {
   currentDocument: null,
   popularDocuments: [],
   recentDocuments: [],
+  bookmarkedDocuments: [],
   searchResults: [],
   pagination: {
     currentPage: 1,
@@ -303,6 +317,30 @@ const documentSlice = createSlice({
         if (action.payload) {
           state.recentDocuments = action.payload;
         }
+      });
+
+    // Fetch bookmarked documents
+    builder
+      .addCase(fetchBookmarkedDocuments.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchBookmarkedDocuments.fulfilled, (state, action) => {
+        state.isLoading = false;
+        if (action.payload) {
+          state.bookmarkedDocuments = action.payload.items || [];
+          state.pagination = {
+            currentPage: action.payload.page || 1,
+            totalPages: action.payload.totalPages || 1,
+            totalItems: action.payload.totalItems || 0,
+            hasNext: action.payload.hasNext || false,
+            hasPrev: action.payload.hasPrev || false,
+          };
+        }
+      })
+      .addCase(fetchBookmarkedDocuments.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
       });
   },
 });

@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 
 const HomePage: React.FC = () => {
   return (
-    <Container className="py-4 py-md-5">
+    <Container className="py-4 py-md-5" style={{ paddingTop: '80px' }}>
       <Row className="text-center mb-4 mb-md-5">
         <Col>
           <h1 className="display-5 display-md-4 fw-bold text-gradient-purple mb-3">

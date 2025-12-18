@@ -82,18 +82,7 @@ body {
   min-height: calc(100vh - 56px); /* Subtract navbar height */
 }
 
-.main-content {
-  flex: 1;
-  padding: 1rem;
-  overflow-y: auto;
-  background-color: var(--bs-body-bg);
-  transition: margin-left 0.3s ease;
-}
-
-/* Sidebar open state */
-.main-content.sidebar-open {
-  margin-left: 250px;
-}
+/* Removed duplicate main-content styles - now defined in Sidebar section */
 
 /* Dark theme specific styles */
 .dark {
@@ -232,15 +221,49 @@ body {
   width: 250px;
   position: fixed;
   top: 56px; /* Height of navbar */
-  left: -250px;
+  left: 0;
   height: calc(100vh - 56px);
-  transition: left 0.3s ease;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
   z-index: 1000;
   overflow-y: auto;
+  background-color: var(--bs-body-bg);
+  border-right: 1px solid var(--bs-border-color);
 }
 
 .sidebar.open {
-  left: 0;
+  transform: translateX(0);
+}
+
+/* Main content adjustment */
+.main-content {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+  padding-top: 72px; /* 56px navbar + 16px spacing */
+  background-color: var(--bs-body-bg);
+  transition: margin-left 0.3s ease;
+  margin-left: 0;
+}
+
+/* Remove extra top padding for specific pages that handle their own spacing */
+.main-content .document-list-container {
+  margin-top: -56px; /* Offset the main-content padding-top */
+}
+
+/* Desktop: sidebar always visible, content has left margin */
+@media (min-width: 992px) {
+  .sidebar {
+    transform: translateX(0);
+  }
+  
+  .main-content {
+    margin-left: 250px;
+  }
+  
+  .navbar-brand-responsive {
+    margin-left: 0 !important;
+  }
 }
 
 .sidebar .nav-link {
@@ -260,7 +283,7 @@ body {
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
+@media (max-width: 991px) {
   .document-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -268,15 +291,26 @@ body {
   
   .main-content {
     padding: 0.5rem;
+    padding-top: 72px;
+    margin-left: 0 !important; /* Sidebar overlays on mobile */
   }
   
   .sidebar {
-    width: 100%;
-    left: -100%;
+    width: 80%;
+    max-width: 300px;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
   }
   
-  .sidebar.open {
+  /* Backdrop when sidebar is open on mobile */
+  .sidebar.open::before {
+    content: '';
+    position: fixed;
+    top: 0;
     left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: -1;
   }
 }
 
