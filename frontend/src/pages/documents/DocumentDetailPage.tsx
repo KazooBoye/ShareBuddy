@@ -1,6 +1,6 @@
 /**
  * Document Detail Page
- * Layout: Left Column (Info, Comments, Q&A) | Right Column (Preview)
+ * Layout: Left Column (Info, Q&A, Comments) | Right Column (Preview)
  */
 
 import React, { useEffect, useState } from 'react';
@@ -50,8 +50,6 @@ const DocumentDetailPage: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      // FIXED: Removed 'fileName' property access since it doesn't exist on the type.
-      // Using title is a safe fallback that always exists.
       link.download = `${currentDocument.title}.pdf`; 
       document.body.appendChild(link);
       link.click();
@@ -59,7 +57,6 @@ const DocumentDetailPage: React.FC = () => {
       window.URL.revokeObjectURL(url);
       
       toast.success('Tải tài liệu thành công!');
-      // Refresh to update credits/download status
       dispatch(fetchDocumentById(currentDocument.id));
     } catch (error: any) {
       toast.error(error.message || 'Không thể tải tài liệu');
@@ -188,15 +185,21 @@ const DocumentDetailPage: React.FC = () => {
             </Card.Body>
           </Card>
 
+          {/* TABS for Q&A, Comments, Ratings */}
           <Card className="shadow-sm border-0">
             <Card.Body>
               <Tabs activeKey={activeTab} onSelect={(k) => setActiveTab(k || 'questions')} className="mb-4">
+                {/* 1. Q&A Tab */}
                 <Tab eventKey="questions" title="Hỏi & Đáp">
                   <QuestionList documentId={currentDocument.id} />
                 </Tab>
+                
+                {/* 2. Comments Tab */}
                 <Tab eventKey="comments" title="Bình luận">
                   <CommentSection documentId={currentDocument.id} />
                 </Tab>
+
+                {/* 3. Ratings Tab */}
                 <Tab eventKey="ratings" title={`Đánh giá (${currentDocument.ratingCount})`}>
                   <RatingComponent documentId={currentDocument.id} />
                 </Tab>
@@ -205,7 +208,7 @@ const DocumentDetailPage: React.FC = () => {
           </Card>
         </Col>
 
-        {/* --- RIGHT COLUMN --- */}
+        {/* --- RIGHT COLUMN (Preview) --- */}
         <Col lg={5}>
           <div className="sticky-top" style={{ top: '100px', zIndex: 1 }}>
             <Card className="shadow-sm border-0">

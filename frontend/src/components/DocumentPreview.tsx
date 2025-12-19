@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Spinner } from 'react-bootstrap';
+import { Alert, Spinner, Button } from 'react-bootstrap';
 import { previewService } from '../services/previewService';
+import { Document, Page, pdfjs } from 'react-pdf';
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface DocumentPreviewProps {
   documentId: string;
@@ -11,95 +14,140 @@ interface PreviewInfo {
   previewUrl: string | null;
   thumbnailUrl: string | null;
   previewPages: number;
+  fileType?: string; 
 }
 
 const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId }) => {
   const [info, setInfo] = useState<PreviewInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<boolean>(false);
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pageNumber, setPageNumber] = useState(1);
 
   useEffect(() => {
-    const fetchPreviewInfo = async () => {
+    const fetch = async () => {
       try {
-        setLoading(true);
-        setError(false);
         const res = await previewService.getPreviewInfo(documentId);
         if (res.success && res.data) {
-          setInfo(res.data);
+          setInfo(res.data as any);
         }
-      } catch (err) {
-        console.error("Preview fetch failed:", err);
-        setError(true);
-      } finally {
-        setLoading(false);
+      } catch (e) { 
+        console.error(e); 
+      } finally { 
+        setLoading(false); 
       }
     };
-
-    if (documentId) {
-      fetchPreviewInfo();
-    }
+    fetch();
   }, [documentId]);
 
-  if (loading) {
-    return (
-      <div className="text-center py-5 bg-light rounded" style={{minHeight: '200px'}}>
-        <Spinner animation="border" variant="secondary" />
-        <p className="mt-2 text-muted small">Đang tải bản xem trước...</p>
-      </div>
-    );
-  }
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+  };
+  
+  const getFullUrl = (url: string) => {
+    if (!url) return '';
+    return url.startsWith('http') ? url : `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${url}`;
+  };
 
-  // Case 1: Preview PDF exists
-  if (info?.hasPreview && info.previewUrl) {
-    // Ensure URL is absolute if it comes as relative from DB
-    const fullUrl = info.previewUrl.startsWith('http') 
-      ? info.previewUrl 
-      : `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${info.previewUrl}`;
+  if (loading) return (
+    <div className="text-center py-5 bg-light rounded" style={{minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <Spinner animation="border" variant="secondary" />
+    </div>
+  );
 
+  // 1. PDF RENDERER (Used for PDF, DOCX, PPTX converted previews)
+  // Logic: If backend provides a previewUrl, it is a PDF. Render it.
+  if (info?.previewUrl) {
     return (
-      <div className="document-preview-container" style={{ height: '600px', border: '1px solid #ddd' }}>
-        <iframe
-          src={fullUrl}
-          width="100%"
-          height="100%"
-          title="Document Preview"
-          style={{ border: 'none' }}
-        />
-        <div className="bg-light p-2 text-center text-muted small border-top">
-          Hiển thị {info.previewPages} trang đầu tiên
+      <div className="document-preview-container bg-secondary bg-opacity-10 rounded border" style={{minHeight: '500px'}}>
+        <div className="d-flex justify-content-center p-3 overflow-hidden">
+          <Document
+            file={getFullUrl(info.previewUrl)}
+            onLoadSuccess={onDocumentLoadSuccess}
+            loading={
+              <div className="text-center py-5">
+                <Spinner animation="border" size="sm" /> 
+                <div className="mt-2 text-muted">Đang tải bản xem trước...</div>
+              </div>
+            }
+            error={
+              <Alert variant="warning" className="text-center m-3">
+                Không thể tải file preview. <br/>
+                <small>Vui lòng thử tải xuống tài liệu để xem.</small>
+              </Alert>
+            }
+          >
+            {/* Render current page */}
+            <Page 
+              pageNumber={pageNumber} 
+              width={400} 
+              renderTextLayer={false} 
+              renderAnnotationLayer={false} 
+              className="shadow-sm"
+            />
+          </Document>
+        </div>
+
+        {/* Pagination Controls */}
+        {numPages && (
+          <div className="bg-white border-top p-2 d-flex justify-content-between align-items-center">
+            <Button 
+              variant="outline-secondary" 
+              size="sm" 
+              disabled={pageNumber <= 1} 
+              onClick={() => setPageNumber(p => p - 1)}
+            >
+              <i className="bi bi-chevron-left" /> Trước
+            </Button>
+            
+            <span className="small text-muted fw-bold">
+              Trang {pageNumber} / {numPages}
+            </span>
+            
+            <Button 
+              variant="outline-secondary" 
+              size="sm" 
+              disabled={pageNumber >= numPages} 
+              onClick={() => setPageNumber(p => p + 1)}
+            >
+              Sau <i className="bi bi-chevron-right" />
+            </Button>
+          </div>
+        )}
+        
+        <div className="bg-light text-center py-1 border-top">
+          <small className="text-muted" style={{fontSize: '0.75rem'}}>
+            Đang xem bản xem trước {info.previewPages > 0 ? `${info.previewPages} trang` : ''}.
+          </small>
         </div>
       </div>
     );
   }
 
-  // Case 2: Thumbnail fallback
+  // 2. Fallback: Thumbnail
   if (info?.thumbnailUrl) {
-    const thumbUrl = info.thumbnailUrl.startsWith('http') 
-      ? info.thumbnailUrl 
-      : `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${info.thumbnailUrl}`;
-
     return (
-      <div className="text-center bg-light p-4 rounded">
+      <div className="text-center bg-light p-4 rounded border d-flex flex-column align-items-center justify-content-center" style={{minHeight: '400px'}}>
         <img 
-          src={thumbUrl} 
+          src={getFullUrl(info.thumbnailUrl)} 
           alt="Document Thumbnail" 
-          className="img-fluid shadow-sm mb-3"
-          style={{ maxHeight: '400px' }}
+          className="img-fluid shadow-sm mb-3 border"
+          style={{ maxHeight: '350px', objectFit: 'contain' }}
         />
-        <Alert variant="info" className="small mb-0">
+        <Alert variant="info" className="small mb-0 w-75">
           <i className="bi bi-info-circle me-2"></i>
-          Chỉ có hình ảnh thu nhỏ. Tải xuống để xem nội dung đầy đủ.
+          Bản xem trước PDF đang được tạo hoặc không khả dụng.
         </Alert>
       </div>
     );
   }
 
-  // Case 3: Error or No Preview
+  // 3. Fallback: No Preview/Thumbnail
   return (
-    <div className="text-center py-5 bg-light rounded border">
-      <i className="bi bi-file-earmark-lock display-4 text-muted opacity-50"></i>
-      <p className="mt-3 text-muted">
-        {error ? 'Không thể tải bản xem trước.' : 'Bản xem trước chưa sẵn sàng.'}
+    <div className="text-center py-5 bg-light rounded border d-flex flex-column align-items-center justify-content-center" style={{minHeight: '300px'}}>
+      <i className="bi bi-file-earmark-lock display-3 text-muted opacity-25 mb-3" />
+      <h6 className="text-muted">Bản xem trước không khả dụng</h6>
+      <p className="text-muted small mb-0 px-3">
+        Vui lòng tải xuống để xem nội dung đầy đủ của tài liệu này.
       </p>
     </div>
   );

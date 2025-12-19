@@ -57,6 +57,14 @@ coverage/
 
 # Uploads directory (but keep the structure)
 backend/uploads/documents/*
+backend/uploads/avatars/*
+backend/uploads/temp/*
+backend/uploads/previews/*
+backend/uploads/thumbnails/*
+!backend/uploads/temp/.gitkeep
+!backend/uploads/previews/.gitkeep
+!backend/uploads/thumbnails/.gitkeep
+!backend/uploads/avatars/.gitkeep
 !backend/uploads/documents/.gitkeep
 
 # Database backup files
