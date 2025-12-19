@@ -26,37 +26,45 @@ export interface User {
   isFollowing?: boolean;
 }
 
+// Helper interface for user info embedded in other objects
+export interface UserSimple {
+  id: string;
+  username: string;
+  fullName: string;
+  avatarUrl: string | null;
+  isVerifiedAuthor?: boolean;
+  university?: string; // Sometimes needed
+  major?: string;
+}
+
 // Document related types
 export interface Document {
   id: string;
   title: string;
   description: string;
-  fileUrl: string;
+  fileName?: string; // NEW: Added fileName
+  fileUrl?: string; // Optional if not returned in list view
+  fileSize?: number; // NEW
+  fileType?: string; // NEW
   thumbnailUrl?: string;
-  category: string;
+  category?: string; // Made optional as it might be replaced by subject in some contexts
   subject: string;
+  university?: string; // NEW: Added university to root
   creditCost: number;
   downloadCount: number;
+  viewCount?: number; // NEW
   status: 'pending' | 'approved' | 'rejected';
   avgRating?: string;
   ratingCount: number;
   tags?: string[];
   createdAt: string;
   updatedAt: string;
-  author: {
-    id: string;
-    username: string;
-    fullName: string;
-    avatarUrl?: string;
-    isVerifiedAuthor: boolean;
-    university?: string;
-    major?: string;
-  };
+  author: UserSimple; // Use consistent user type
   userInteraction?: {
     isBookmarked: boolean;
     userRating?: {
       rating: number;
-      comment: string;
+      comment?: string; // Optional
     };
     canDownload: boolean;
   };
@@ -72,50 +80,78 @@ export interface Document {
 export interface Rating {
   id: string;
   rating: number;
-  comment?: string;
+  comment?: string; // Optional field for UI, even if not in DB
   createdAt: string;
-  updatedAt: string;
-  user: {
-    id: string;
-    username: string;
-    fullName: string;
-    avatarUrl?: string;
-    isVerifiedAuthor: boolean;
-  };
-  likeCount?: number;
+  updatedAt?: string;
+  user: UserSimple;
   isLiked?: boolean;
+  likeCount?: number;
 }
 
 export interface RatingStatistics {
   totalRatings: number;
   avgRating?: string;
   distribution: {
-    fiveStar: number;
-    fourStar: number;
-    threeStar: number;
-    twoStar: number;
-    oneStar: number;
+    [key: string]: number; // "1", "2", "3", "4", "5"
   };
+}
+
+// NEW: Response structures for Rating Service
+export interface DocumentRatingsResponse {
+  ratings: Rating[];
+  statistics: RatingStatistics;
+  pagination: Pagination;
+}
+
+export interface SingleRatingResponse {
+  rating: Rating;
 }
 
 // Comment related types
 export interface Comment {
   id: string;
   content: string;
-  parentId?: string;
+  parentId?: string; // Matches frontend usage
   createdAt: string;
   updatedAt: string;
   likeCount: number;
   replyCount: number;
   isLiked: boolean;
-  user: {
-    id: string;
-    username: string;
-    fullName: string;
-    avatarUrl?: string;
-    isVerifiedAuthor: boolean;
-  };
+  user: UserSimple;
   replies?: Comment[];
+}
+
+// NEW: Q&A related types (Question & Answer)
+export interface Question {
+  id: string;
+  title: string;
+  content: string;
+  isAnswered: boolean;
+  acceptedAnswerId?: string | null;
+  voteCount: number;
+  viewCount: number;
+  answerCount: number;
+  documentId?: string; // Optional depending on context
+  documentTitle?: string;
+  author: UserSimple;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Answer {
+  id: string;
+  content: string;
+  isAccepted: boolean;
+  voteCount: number;
+  questionId?: string;
+  author: UserSimple;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface QuestionDetailResponse {
+  question: Question;
+  answers: Answer[];
 }
 
 // Credit related types
@@ -133,6 +169,7 @@ export interface CreditTransaction {
 }
 
 export interface CreditPackage {
+  id?: string; // Added ID
   credits: number;
   price: number;
   currency: string;
@@ -154,34 +191,7 @@ export interface Notification {
     title: string;
     thumbnailUrl?: string;
   };
-  relatedUser?: {
-    id: string;
-    username: string;
-    fullName: string;
-    avatarUrl?: string;
-  };
-}
-
-export interface Activity {
-  type: 'document' | 'rating';
-  id: string;
-  title: string;
-  description: string;
-  thumbnailUrl?: string;
-  category: string;
-  subject: string;
-  creditCost: number;
-  downloadCount: number;
-  avgRating?: string;
-  ratingCount: number;
-  createdAt: string;
-  user: {
-    id: string;
-    username: string;
-    fullName: string;
-    avatarUrl?: string;
-    isVerifiedAuthor: boolean;
-  };
+  relatedUser?: UserSimple;
 }
 
 // Pagination types
@@ -189,25 +199,15 @@ export interface Pagination {
   currentPage: number;
   totalPages: number;
   totalItems: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
+  hasNextPage?: boolean; // Optional, computed often
+  hasPrevPage?: boolean;
+  hasNext?: boolean; // Redux slice used this name
+  hasPrev?: boolean;
 }
 
 // Document upload response types
 export interface DocumentUploadResponse {
-  document: {
-    id: string;
-    title: string;
-    description: string;
-    fileName: string;
-    fileSize: number;
-    fileType: string;
-    subject: string;
-    university?: string;
-    creditCost: number;
-    status: 'pending' | 'approved' | 'rejected';
-    createdAt: string;
-  };
+  document: Document; // Reusing Document interface
   moderation?: {
     jobId: string;
     status: string;
@@ -223,6 +223,7 @@ export interface ApiResponse<T = any> {
   details?: any[];
 }
 
+// Generic Paginated Response
 export interface PaginatedResponse<T> {
   items: T[];
   page: number;
@@ -287,21 +288,6 @@ export interface ProfileUpdateForm {
   major?: string;
 }
 
-// Search and Filter types
-export interface DocumentFilters {
-  search?: string;
-  category?: string;
-  subject?: string;
-  university?: string;
-  major?: string;
-  minRating?: number;
-  maxCost?: number;
-  sortBy?: 'created_at' | 'title' | 'download_count' | 'avg_rating' | 'credit_cost';
-  sortOrder?: 'ASC' | 'DESC';
-  page?: number;
-  limit?: number;
-}
-
 // Redux State types
 export interface AuthState {
   user: User | null;
@@ -313,10 +299,17 @@ export interface AuthState {
 export interface DocumentState {
   documents: Document[];
   currentDocument: Document | null;
-  filters: DocumentFilters;
+  popularDocuments: Document[]; // NEW
+  recentDocuments: Document[];  // NEW
+  searchResults: Document[];    // NEW
+  pagination: Pagination;       // NEW: made non-nullable for easier usage
+  searchParams: DocumentSearchParams | null; // NEW
   isLoading: boolean;
+  isUploading: boolean;         // NEW
+  uploadProgress: number;       // NEW
   error: string | null;
-  pagination: Pagination | null;
+  categories: string[];
+  subjects: string[];
 }
 
 export interface UIState {

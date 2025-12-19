@@ -30,9 +30,8 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const creditRoutes = require('./routes/creditRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
-// Keep problematic routes disabled
-// const ratingRoutes = require('./routes/ratingRoutes');
-// const commentRoutes = require('./routes/commentRoutes');
+const ratingRoutes = require('./routes/ratingRoutes');
+const commentRoutes = require('./routes/commentRoutes');
 // const socialRoutes = require('./routes/socialRoutes');
 // const adminRoutes = require('./routes/adminRoutes');
 
@@ -115,9 +114,8 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/credits', creditRoutes);
 app.use('/api/webhooks', webhookRoutes);
-// Keep problematic routes disabled for now
-// app.use('/api/ratings', ratingRoutes);
-// app.use('/api/comments', commentRoutes);
+app.use('/api/ratings', ratingRoutes);
+app.use('/api/comments', commentRoutes);
 // app.use('/api/social', socialRoutes);
 // app.use('/api/admin', adminRoutes);
 

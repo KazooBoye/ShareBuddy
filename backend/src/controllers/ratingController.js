@@ -1,87 +1,102 @@
 /**
  * Rating controller
- * Handles document ratings and comments functionality
+ * Handles document ratings (numerical scores only)
  */
 
 const { validationResult } = require('express-validator');
 const { query, withTransaction } = require('../config/database');
 
 // Create or update rating for a document
+// FIXED: Upsert logic to prevent duplicates
 const rateDocument = async (req, res, next) => {
   try {
-    // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        error: 'Dữ liệu không hợp lệ',
-        details: errors.array()
-      });
+      return res.status(400).json({ success: false, error: 'Dữ liệu không hợp lệ', details: errors.array() });
     }
 
     const { id: documentId } = req.params;
     const { rating, comment } = req.body;
     const userId = req.user.user_id;
 
-    // Check if document exists and is approved
+    // Check if document exists
     const docResult = await query(
-      'SELECT user_id, title FROM documents WHERE document_id = $1 AND status = $2',
+      'SELECT author_id, title FROM documents WHERE document_id = $1 AND status = $2',
       [documentId, 'approved']
     );
 
     if (docResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Tài liệu không tồn tại hoặc chưa được duyệt'
-      });
+      return res.status(404).json({ success: false, error: 'Tài liệu không tồn tại' });
     }
 
-    const document = docResult.rows[0];
+    // if (docResult.rows[0].author_id === userId) {
+    //   return res.status(403).json({ success: false, error: 'Không thể đánh giá tài liệu của chính mình' });
+    // }
 
-    // Users cannot rate their own documents
-    if (document.user_id === userId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Không thể đánh giá tài liệu của chính mình'
-      });
-    }
+    let ratingData;
 
-    // Check if user already rated this document
-    const existingRating = await query(
-      'SELECT rating_id FROM ratings WHERE user_id = $1 AND document_id = $2',
-      [userId, documentId]
-    );
-
-    let result;
-    if (existingRating.rows.length > 0) {
-      // Update existing rating
-      result = await query(
-        `UPDATE ratings 
-         SET rating = $1, comment = $2, updated_at = NOW()
-         WHERE user_id = $3 AND document_id = $4
-         RETURNING rating_id, rating, comment, created_at, updated_at`,
-        [rating, comment, userId, documentId]
+    await withTransaction(async (client) => {
+      // 1. Handle Rating (Check Existence First)
+      const existingRating = await client.query(
+        'SELECT rating_id FROM ratings WHERE user_id = $1 AND document_id = $2',
+        [userId, documentId]
       );
-    } else {
-      // Create new rating
-      result = await query(
-        `INSERT INTO ratings (user_id, document_id, rating, comment)
-         VALUES ($1, $2, $3, $4)
-         RETURNING rating_id, rating, comment, created_at, updated_at`,
-        [userId, documentId, rating, comment]
-      );
-    }
 
-    const ratingData = result.rows[0];
+      if (existingRating.rows.length > 0) {
+        // UPDATE existing
+        const updateResult = await client.query(
+          `UPDATE ratings SET rating = $1, updated_at = NOW()
+           WHERE user_id = $2 AND document_id = $3
+           RETURNING rating_id, rating, created_at, updated_at`,
+          [rating, userId, documentId]
+        );
+        ratingData = updateResult.rows[0];
+      } else {
+        // INSERT new
+        const insertResult = await client.query(
+          `INSERT INTO ratings (user_id, document_id, rating)
+           VALUES ($1, $2, $3)
+           RETURNING rating_id, rating, created_at, updated_at`,
+          [userId, documentId, rating]
+        );
+        ratingData = insertResult.rows[0];
+      }
+
+      // 2. Handle Review Comment (Stored in comments table)
+      // We assume a review is a root-level comment linked to this user/doc
+      if (comment !== undefined) {
+        const existingComment = await client.query(
+          'SELECT comment_id FROM comments WHERE user_id = $1 AND document_id = $2 AND parent_comment_id IS NULL',
+          [userId, documentId]
+        );
+
+        if (comment.trim().length > 0) {
+          if (existingComment.rows.length > 0) {
+            // Update
+            await client.query(
+              'UPDATE comments SET content = $1, updated_at = NOW() WHERE comment_id = $2',
+              [comment, existingComment.rows[0].comment_id]
+            );
+          } else {
+            // Insert
+            await client.query(
+              'INSERT INTO comments (user_id, document_id, content) VALUES ($1, $2, $3)',
+              [userId, documentId, comment]
+            );
+          }
+        } else if (existingComment.rows.length > 0) {
+          await client.query('DELETE FROM comments WHERE comment_id = $1', [existingComment.rows[0].comment_id]);
+        }
+      }
+    });
 
     res.json({
       success: true,
-      message: existingRating.rows.length > 0 ? 'Cập nhật đánh giá thành công' : 'Đánh giá thành công',
+      message: 'Đánh giá thành công',
       data: {
         rating: {
           id: ratingData.rating_id,
           rating: ratingData.rating,
-          comment: ratingData.comment,
           createdAt: ratingData.created_at,
           updatedAt: ratingData.updated_at
         }
@@ -92,49 +107,35 @@ const rateDocument = async (req, res, next) => {
   }
 };
 
-// Get ratings for a document with pagination
+// Get ratings for a document
 const getDocumentRatings = async (req, res, next) => {
   try {
     const { id: documentId } = req.params;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
-    const sortBy = req.query.sortBy || 'created_at';
-    const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
 
-    // Check if document exists
-    const docResult = await query(
-      'SELECT document_id, title FROM documents WHERE document_id = $1',
-      [documentId]
-    );
-
-    if (docResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Tài liệu không tồn tại'
-      });
-    }
-
-    // Validate sort parameters
-    const validSortFields = ['created_at', 'rating', 'updated_at'];
-    const finalSortBy = validSortFields.includes(sortBy) ? sortBy : 'created_at';
-
-    // Get ratings with user information
+    // Use DISTINCT ON (r.rating_id) to prevent duplicates if JOIN causes multiple rows
+    // Added 'c.content' to fetch the actual review text
     const ratingsResult = await query(
-      `SELECT r.rating_id, r.rating, r.comment, r.created_at, r.updated_at,
-              u.user_id, u.username, u.full_name, u.avatar_url, u.is_verified_author
+      `SELECT DISTINCT ON (r.created_at, r.rating_id) 
+              r.rating_id, r.rating, r.created_at, r.updated_at,
+              u.user_id, u.username, u.full_name, u.avatar_url, u.is_verified_author,
+              c.content as comment_text
        FROM ratings r
        JOIN users u ON r.user_id = u.user_id
+       LEFT JOIN comments c ON c.document_id = r.document_id 
+                            AND c.user_id = r.user_id 
+                            AND c.parent_comment_id IS NULL
        WHERE r.document_id = $1 AND u.is_active = true
-       ORDER BY r.${finalSortBy} ${sortOrder}
+       ORDER BY r.created_at DESC
        LIMIT $2 OFFSET $3`,
       [documentId, limit, offset]
     );
 
-    // Get total count and average rating
     const statsResult = await query(
       `SELECT COUNT(*) as total_ratings,
-              AVG(rating) as avg_rating,
+              COALESCE(AVG(rating), 0) as avg_rating,
               COUNT(CASE WHEN rating = 5 THEN 1 END) as five_star,
               COUNT(CASE WHEN rating = 4 THEN 1 END) as four_star,
               COUNT(CASE WHEN rating = 3 THEN 1 END) as three_star,
@@ -148,7 +149,6 @@ const getDocumentRatings = async (req, res, next) => {
 
     const stats = statsResult.rows[0];
     const total = parseInt(stats.total_ratings);
-    const totalPages = Math.ceil(total / limit);
 
     res.json({
       success: true,
@@ -156,9 +156,8 @@ const getDocumentRatings = async (req, res, next) => {
         ratings: ratingsResult.rows.map(row => ({
           id: row.rating_id,
           rating: row.rating,
-          comment: row.comment,
+          comment: row.comment_text || '', // Ensure comment text is returned
           createdAt: row.created_at,
-          updatedAt: row.updated_at,
           user: {
             id: row.user_id,
             username: row.username,
@@ -169,21 +168,19 @@ const getDocumentRatings = async (req, res, next) => {
         })),
         statistics: {
           totalRatings: total,
-          avgRating: stats.avg_rating ? parseFloat(stats.avg_rating).toFixed(1) : null,
+          avgRating: parseFloat(stats.avg_rating).toFixed(1),
           distribution: {
-            fiveStar: parseInt(stats.five_star),
-            fourStar: parseInt(stats.four_star),
-            threeStar: parseInt(stats.three_star),
-            twoStar: parseInt(stats.two_star),
-            oneStar: parseInt(stats.one_star)
+            "5": parseInt(stats.five_star),
+            "4": parseInt(stats.four_star),
+            "3": parseInt(stats.three_star),
+            "2": parseInt(stats.two_star),
+            "1": parseInt(stats.one_star)
           }
         },
         pagination: {
           currentPage: page,
-          totalPages,
-          totalItems: total,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
+          totalPages: Math.ceil(total / limit),
+          totalItems: total
         }
       }
     });
@@ -192,62 +189,34 @@ const getDocumentRatings = async (req, res, next) => {
   }
 };
 
-// Delete user's rating
-const deleteRating = async (req, res, next) => {
-  try {
-    const { id: documentId } = req.params;
-    const userId = req.user.user_id;
-
-    const result = await query(
-      'DELETE FROM ratings WHERE user_id = $1 AND document_id = $2 RETURNING rating_id',
-      [userId, documentId]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Không tìm thấy đánh giá để xóa'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Xóa đánh giá thành công'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Get user's rating for a document
 const getUserRating = async (req, res, next) => {
   try {
     const { id: documentId } = req.params;
     const userId = req.user.user_id;
 
     const result = await query(
-      `SELECT rating_id, rating, comment, created_at, updated_at
-       FROM ratings
-       WHERE user_id = $1 AND document_id = $2`,
+      `SELECT r.rating_id, r.rating, r.created_at, r.updated_at,
+              c.content as comment_text
+       FROM ratings r
+       LEFT JOIN comments c ON c.document_id = r.document_id 
+                            AND c.user_id = r.user_id 
+                            AND c.parent_comment_id IS NULL
+       WHERE r.user_id = $1 AND r.document_id = $2`,
       [userId, documentId]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Chưa có đánh giá cho tài liệu này'
-      });
+      return res.status(404).json({ success: false, error: 'Chưa có đánh giá' });
     }
 
     const rating = result.rows[0];
-
     res.json({
       success: true,
       data: {
         rating: {
           id: rating.rating_id,
           rating: rating.rating,
-          comment: rating.comment,
+          comment: rating.comment_text || '',
           createdAt: rating.created_at,
           updatedAt: rating.updated_at
         }
@@ -258,70 +227,52 @@ const getUserRating = async (req, res, next) => {
   }
 };
 
-// Like/unlike a rating comment
+const deleteRating = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.user_id;
+        await withTransaction(async (client) => {
+            await client.query('DELETE FROM ratings WHERE user_id=$1 AND document_id=$2', [userId, id]);
+        });
+        res.json({success: true, message: 'Deleted'});
+    } catch(e) { next(e); }
+}
+
+// Toggle like on a rating
 const toggleRatingLike = async (req, res, next) => {
   try {
     const { ratingId } = req.params;
     const userId = req.user.user_id;
 
     // Check if rating exists
-    const ratingResult = await query(
-      'SELECT user_id FROM ratings WHERE rating_id = $1',
-      [ratingId]
-    );
-
-    if (ratingResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Đánh giá không tồn tại'
-      });
+    const ratingCheck = await query('SELECT 1 FROM ratings WHERE rating_id = $1', [ratingId]);
+    if (ratingCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Rating not found' });
     }
 
-    // Users cannot like their own ratings
-    if (ratingResult.rows[0].user_id === userId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Không thể like đánh giá của chính mình'
-      });
-    }
-
-    // Check if already liked
     const existingLike = await query(
       'SELECT 1 FROM rating_likes WHERE user_id = $1 AND rating_id = $2',
       [userId, ratingId]
     );
 
-    let isLiked;
+    let isLiked = false;
     if (existingLike.rows.length > 0) {
-      // Unlike
-      await query(
-        'DELETE FROM rating_likes WHERE user_id = $1 AND rating_id = $2',
-        [userId, ratingId]
-      );
-      isLiked = false;
+      await query('DELETE FROM rating_likes WHERE user_id = $1 AND rating_id = $2', [userId, ratingId]);
     } else {
-      // Like
-      await query(
-        'INSERT INTO rating_likes (user_id, rating_id) VALUES ($1, $2)',
-        [userId, ratingId]
-      );
+      await query('INSERT INTO rating_likes (user_id, rating_id) VALUES ($1, $2)', [userId, ratingId]);
       isLiked = true;
     }
 
-    // Get updated like count
-    const likeCountResult = await query(
-      'SELECT COUNT(*) as like_count FROM rating_likes WHERE rating_id = $1',
+    const countResult = await query(
+      'SELECT COUNT(*) as count FROM rating_likes WHERE rating_id = $1',
       [ratingId]
     );
 
-    const likeCount = parseInt(likeCountResult.rows[0].like_count);
-
     res.json({
       success: true,
-      message: isLiked ? 'Liked đánh giá' : 'Unliked đánh giá',
       data: {
         isLiked,
-        likeCount
+        likeCount: parseInt(countResult.rows[0].count)
       }
     });
   } catch (error) {
@@ -329,94 +280,72 @@ const toggleRatingLike = async (req, res, next) => {
   }
 };
 
-// Report a rating for inappropriate content
+// Report rating
 const reportRating = async (req, res, next) => {
   try {
     const { ratingId } = req.params;
     const { reason, description } = req.body;
     const userId = req.user.user_id;
 
-    // Check if rating exists
-    const ratingResult = await query(
-      'SELECT rating_id, user_id FROM ratings WHERE rating_id = $1',
-      [ratingId]
-    );
-
-    if (ratingResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Đánh giá không tồn tại'
-      });
-    }
-
-    // Users cannot report their own ratings
-    if (ratingResult.rows[0].user_id === userId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Không thể báo cáo đánh giá của chính mình'
-      });
-    }
-
-    // Check if already reported by this user
-    const existingReport = await query(
+    const existing = await query(
       'SELECT 1 FROM reports WHERE reporter_id = $1 AND rating_id = $2',
       [userId, ratingId]
     );
 
-    if (existingReport.rows.length > 0) {
-      return res.status(409).json({
-        success: false,
-        error: 'Bạn đã báo cáo đánh giá này rồi'
-      });
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ success: false, error: 'Đã báo cáo' });
     }
 
-    // Create report
     await query(
       `INSERT INTO reports (reporter_id, rating_id, reason, description, report_type)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [userId, ratingId, reason, description, 'rating']
+       VALUES ($1, $2, $3, $4, 'rating')`,
+      [userId, ratingId, reason, description]
     );
 
-    res.json({
-      success: true,
-      message: 'Báo cáo đánh giá thành công. Chúng tôi sẽ xem xét sớm nhất.'
-    });
+    res.json({ success: true, message: 'Báo cáo thành công' });
   } catch (error) {
     next(error);
   }
 };
 
-// Get top-rated documents
+// Get Top Rated Documents (Fixed: Uses 'subject' instead of 'category')
 const getTopRatedDocuments = async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
     const minRatings = parseInt(req.query.minRatings) || 5;
-    const category = req.query.category;
+    // Support 'subject' param, fallback to 'category' if frontend sends it
+    const subject = req.query.subject || req.query.category;
 
-    let categoryCondition = '';
+    let whereClause = "d.status = 'approved'";
     let queryParams = [minRatings, limit];
     
-    if (category) {
-      categoryCondition = 'AND d.category = $3';
-      queryParams = [minRatings, category, limit];
+    if (subject) {
+      whereClause += " AND d.subject = $3";
+      queryParams = [minRatings, limit, subject]; // Order matters for param replacement
+      // Fix param order: Limit is usually last in SQL syntax if using LIMIT $N
+      // Let's rewrite strictly:
+      
+      // Re-map params correctly for the query below
+      queryParams = [minRatings, subject, limit];
     }
 
-    const result = await query(
-      `SELECT d.document_id, d.title, d.description, d.thumbnail_url,
-              d.category, d.subject, d.credit_cost, d.download_count,
-              u.user_id, u.username, u.full_name, u.avatar_url, u.is_verified_author,
-              AVG(r.rating) as avg_rating,
-              COUNT(r.rating_id) as rating_count
-       FROM documents d
-       JOIN users u ON d.user_id = u.user_id
-       JOIN ratings r ON d.document_id = r.document_id
-       WHERE d.status = 'approved' ${categoryCondition}
-       GROUP BY d.document_id, u.user_id
-       HAVING COUNT(r.rating_id) >= $1
-       ORDER BY AVG(r.rating) DESC, COUNT(r.rating_id) DESC
-       LIMIT $${queryParams.length}`,
-      queryParams
-    );
+    const queryStr = `
+      SELECT d.document_id, d.title, d.description, d.thumbnail_url,
+             d.subject, d.credit_cost, d.download_count,
+             u.user_id, u.username, u.full_name, u.avatar_url, u.is_verified_author,
+             AVG(r.rating) as avg_rating,
+             COUNT(r.rating_id) as rating_count
+      FROM documents d
+      JOIN users u ON d.author_id = u.user_id
+      JOIN ratings r ON d.document_id = r.document_id
+      WHERE ${whereClause}
+      GROUP BY d.document_id, u.user_id
+      HAVING COUNT(r.rating_id) >= $1
+      ORDER BY avg_rating DESC, rating_count DESC
+      LIMIT $${queryParams.length}
+    `;
+
+    const result = await query(queryStr, queryParams);
 
     res.json({
       success: true,
@@ -426,7 +355,6 @@ const getTopRatedDocuments = async (req, res, next) => {
           title: row.title,
           description: row.description,
           thumbnailUrl: row.thumbnail_url,
-          category: row.category,
           subject: row.subject,
           creditCost: row.credit_cost,
           downloadCount: row.download_count,

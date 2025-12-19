@@ -1,166 +1,107 @@
-/**
- * DocumentPreview Component - Preview PDF documents with watermark
- */
-
-import React, { useState, useEffect } from 'react';
-import { Container, Card, Button, Alert, Spinner, Badge } from 'react-bootstrap';
-import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
-import axios from 'axios';
-
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+import React, { useEffect, useState } from 'react';
+import { Alert, Spinner } from 'react-bootstrap';
+import { previewService } from '../services/previewService';
 
 interface DocumentPreviewProps {
   documentId: string;
-  onPurchase?: () => void;
 }
 
-const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId, onPurchase }) => {
-  const [previewInfo, setPreviewInfo] = useState<any>(null);
-  const [numPages, setNumPages] = useState<number>(0);
-  const [pageNumber, setPageNumber] = useState<number>(1);
+interface PreviewInfo {
+  hasPreview: boolean;
+  previewUrl: string | null;
+  thumbnailUrl: string | null;
+  previewPages: number;
+}
+
+const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId }) => {
+  const [info, setInfo] = useState<PreviewInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
-  const [scale, setScale] = useState<number>(1.0);
+  const [error, setError] = useState<boolean>(false);
 
   useEffect(() => {
-    fetchPreviewInfo();
-  }, [documentId]);
+    const fetchPreviewInfo = async () => {
+      try {
+        setLoading(true);
+        setError(false);
+        const res = await previewService.getPreviewInfo(documentId);
+        if (res.success && res.data) {
+          setInfo(res.data);
+        }
+      } catch (err) {
+        console.error("Preview fetch failed:", err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const fetchPreviewInfo = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`/api/preview/info/${documentId}`);
-      setPreviewInfo(response.data.data);
-      setLoading(false);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Không thể tải thông tin preview');
-      setLoading(false);
+    if (documentId) {
+      fetchPreviewInfo();
     }
-  };
-
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-  };
-
-  const goToPrevPage = () => {
-    setPageNumber((prev) => Math.max(prev - 1, 1));
-  };
-
-  const goToNextPage = () => {
-    setPageNumber((prev) => Math.min(prev + 1, numPages));
-  };
-
-  const zoomIn = () => {
-    setScale((prev) => Math.min(prev + 0.2, 2.0));
-  };
-
-  const zoomOut = () => {
-    setScale((prev) => Math.max(prev - 0.2, 0.5));
-  };
+  }, [documentId]);
 
   if (loading) {
     return (
-      <Container className="py-5 text-center">
-        <Spinner animation="border" variant="primary" />
-        <p className="mt-3">Đang tải preview...</p>
-      </Container>
+      <div className="text-center py-5 bg-light rounded" style={{minHeight: '200px'}}>
+        <Spinner animation="border" variant="secondary" />
+        <p className="mt-2 text-muted small">Đang tải bản xem trước...</p>
+      </div>
     );
   }
 
-  if (error) {
+  // Case 1: Preview PDF exists
+  if (info?.hasPreview && info.previewUrl) {
+    // Ensure URL is absolute if it comes as relative from DB
+    const fullUrl = info.previewUrl.startsWith('http') 
+      ? info.previewUrl 
+      : `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${info.previewUrl}`;
+
     return (
-      <Container className="py-5">
-        <Alert variant="danger">{error}</Alert>
-      </Container>
+      <div className="document-preview-container" style={{ height: '600px', border: '1px solid #ddd' }}>
+        <iframe
+          src={fullUrl}
+          width="100%"
+          height="100%"
+          title="Document Preview"
+          style={{ border: 'none' }}
+        />
+        <div className="bg-light p-2 text-center text-muted small border-top">
+          Hiển thị {info.previewPages} trang đầu tiên
+        </div>
+      </div>
     );
   }
 
-  if (!previewInfo?.hasPreview) {
+  // Case 2: Thumbnail fallback
+  if (info?.thumbnailUrl) {
+    const thumbUrl = info.thumbnailUrl.startsWith('http') 
+      ? info.thumbnailUrl 
+      : `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${info.thumbnailUrl}`;
+
     return (
-      <Container className="py-5">
-        <Alert variant="warning">
-          <Alert.Heading>Preview chưa khả dụng</Alert.Heading>
-          <p>Tài liệu này chưa có bản preview. Vui lòng liên hệ quản trị viên.</p>
+      <div className="text-center bg-light p-4 rounded">
+        <img 
+          src={thumbUrl} 
+          alt="Document Thumbnail" 
+          className="img-fluid shadow-sm mb-3"
+          style={{ maxHeight: '400px' }}
+        />
+        <Alert variant="info" className="small mb-0">
+          <i className="bi bi-info-circle me-2"></i>
+          Chỉ có hình ảnh thu nhỏ. Tải xuống để xem nội dung đầy đủ.
         </Alert>
-      </Container>
+      </div>
     );
   }
 
+  // Case 3: Error or No Preview
   return (
-    <Container className="py-4">
-      <Card>
-        <Card.Header className="bg-primary text-white d-flex justify-content-between align-items-center">
-          <div>
-            <h5 className="mb-0">{previewInfo.title}</h5>
-            <small>
-              Preview: {previewInfo.previewPages}/{previewInfo.totalPages} trang
-              <Badge bg="warning" className="ms-2">PREVIEW</Badge>
-            </small>
-          </div>
-          {onPurchase && (
-            <Button variant="light" onClick={onPurchase}>
-              Mua toàn bộ tài liệu
-            </Button>
-          )}
-        </Card.Header>
-
-        <Card.Body>
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <div className="btn-group">
-              <Button variant="outline-primary" onClick={goToPrevPage} disabled={pageNumber <= 1}>
-                ‹ Trang trước
-              </Button>
-              <Button variant="outline-primary" disabled>
-                {pageNumber} / {numPages}
-              </Button>
-              <Button variant="outline-primary" onClick={goToNextPage} disabled={pageNumber >= numPages}>
-                Trang sau ›
-              </Button>
-            </div>
-
-            <div className="btn-group">
-              <Button variant="outline-secondary" onClick={zoomOut} disabled={scale <= 0.5}>
-                -
-              </Button>
-              <Button variant="outline-secondary" disabled>
-                {Math.round(scale * 100)}%
-              </Button>
-              <Button variant="outline-secondary" onClick={zoomIn} disabled={scale >= 2.0}>
-                +
-              </Button>
-            </div>
-          </div>
-
-          <div className="d-flex justify-content-center bg-light p-3" style={{ minHeight: '600px' }}>
-            <Document
-              file={`${process.env.REACT_APP_API_URL}${previewInfo.previewUrl}`}
-              onLoadSuccess={onDocumentLoadSuccess}
-              loading={<Spinner animation="border" variant="primary" />}
-              error={
-                <Alert variant="danger">
-                  Không thể tải tài liệu. Vui lòng thử lại sau.
-                </Alert>
-              }
-            >
-              <Page
-                pageNumber={pageNumber}
-                scale={scale}
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-              />
-            </Document>
-          </div>
-
-          <Alert variant="info" className="mt-3">
-            <strong>Lưu ý:</strong> Đây chỉ là bản preview với watermark. 
-            Để xem toàn bộ {previewInfo.totalPages} trang và tải về, vui lòng mua tài liệu.
-          </Alert>
-        </Card.Body>
-      </Card>
-    </Container>
+    <div className="text-center py-5 bg-light rounded border">
+      <i className="bi bi-file-earmark-lock display-4 text-muted opacity-50"></i>
+      <p className="mt-3 text-muted">
+        {error ? 'Không thể tải bản xem trước.' : 'Bản xem trước chưa sẵn sàng.'}
+      </p>
+    </div>
   );
 };
 

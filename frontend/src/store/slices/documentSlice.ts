@@ -3,7 +3,7 @@
  */
 
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { Document, DocumentSearchParams, DocumentFilters, Pagination } from '../../types';
+import { Document, DocumentSearchParams } from '../../types';
 import { documentService } from '../../services/documentService';
 
 // Async thunks
@@ -230,8 +230,11 @@ const documentSlice = createSlice({
       })
       .addCase(fetchDocumentById.fulfilled, (state, action) => {
         state.isLoading = false;
-        if (action.payload) {
-          state.currentDocument = action.payload;
+        const payload = action.payload as any;
+        if (payload && payload.document) {
+          state.currentDocument = payload.document;
+        } else {
+          state.currentDocument = null;
         }
       })
       .addCase(fetchDocumentById.rejected, (state, action) => {
@@ -249,8 +252,6 @@ const documentSlice = createSlice({
       .addCase(uploadDocument.fulfilled, (state, action) => {
         state.isUploading = false;
         state.uploadProgress = 100;
-        // Don't add to documents list - pending documents are shown in user profile
-        // Only approved documents appear in the main document list
       })
       .addCase(uploadDocument.rejected, (state, action) => {
         state.isUploading = false;
@@ -292,13 +293,23 @@ const documentSlice = createSlice({
           if (state.currentDocument && state.currentDocument.id === documentId) {
             if (state.currentDocument.userInteraction) {
               state.currentDocument.userInteraction.isBookmarked = isBookmarked;
+            } else {
+              // Create userInteraction object if it doesn't exist
+              state.currentDocument.userInteraction = {
+                isBookmarked,
+                // FIXED: Use undefined instead of null to match typical TS interface for optional property
+                userRating: undefined,
+                canDownload: false
+              };
             }
           }
           
           // Update documents list
           const docIndex = state.documents.findIndex(doc => doc.id === documentId);
-          if (docIndex !== -1 && state.documents[docIndex].userInteraction) {
-            state.documents[docIndex].userInteraction!.isBookmarked = isBookmarked;
+          if (docIndex !== -1) {
+             if (state.documents[docIndex].userInteraction) {
+                state.documents[docIndex].userInteraction!.isBookmarked = isBookmarked;
+             }
           }
         }
       });
