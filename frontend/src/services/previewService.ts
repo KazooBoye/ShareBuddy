@@ -1,13 +1,26 @@
 import { apiRequest } from './api';
+import { ApiResponse } from '../types';
+
+interface PreviewData {
+  documentId: string;
+  title: string;
+  hasPreview: boolean;
+  hasThumbnail: boolean;
+  previewGenerated: boolean;
+  previewPages: number;
+  viewCount: number;
+  fileSize: string;
+  previewUrl: string | null;
+  thumbnailUrl: string | null;
+}
 
 export const previewService = {
-  // Get preview info (images, pages, etc.)
+  // Get preview info
   getPreviewInfo: async (documentId: string) => {
-    // This matches the 404 route in your console
-    return apiRequest('GET', `/preview/${documentId}/info`);
+    return apiRequest<PreviewData>('GET', `/preview/${documentId}/info`);
   },
 
-  // (Admin/Owner) Generate preview manually if missing
+  // (Admin/Owner) Generate preview manually
   generatePreview: async (documentId: string) => {
     return apiRequest('POST', `/preview/${documentId}/generate`);
   }
