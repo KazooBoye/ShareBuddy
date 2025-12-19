@@ -56,6 +56,8 @@ export interface Document {
   status: 'pending' | 'approved' | 'rejected';
   avgRating?: string;
   ratingCount: number;
+  questionCount?: number;
+  commentCount?: number;
   tags?: string[];
   createdAt: string;
   updatedAt: string;

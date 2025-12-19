@@ -121,7 +121,7 @@ const RatingComponent: React.FC<RatingComponentProps> = ({ documentId }) => {
     <div className="rating-component">
       <Row className="mb-4">
         <Col md={6} className="text-center d-flex flex-column justify-content-center border-end">
-          <div className="display-4 fw-bold text-dark mb-0">{avgRating.toFixed(1)}</div>
+          <div className="display-4 fw-bold text-white mb-0">{avgRating.toFixed(1)}</div>
           <div className="mb-2">{renderStars(Math.round(avgRating))}</div>
           <div className="text-muted small">{ratingStats?.totalRatings || 0} đánh giá</div>
         </Col>
@@ -131,7 +131,7 @@ const RatingComponent: React.FC<RatingComponentProps> = ({ documentId }) => {
       {isAuthenticated && (
         <div className="mb-4 text-center">
           {userRating ? (
-            <div className="p-3 bg-light rounded border d-flex justify-content-between align-items-center">
+            <div className="p-3 rounded border d-flex justify-content-between align-items-center">
               <div><span className="fw-bold me-2">Đánh giá của bạn:</span> {renderStars(userRating.rating)}</div>
               <Button variant="link" size="sm" onClick={() => setShowRatingModal(true)}>Chỉnh sửa</Button>
             </div>

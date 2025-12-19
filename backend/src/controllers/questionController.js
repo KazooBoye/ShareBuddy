@@ -190,7 +190,7 @@ const createQuestion = async (req, res, next) => {
 
     // Check if document exists
     const docResult = await query(
-      'SELECT document_id FROM documents WHERE document_id = $1',
+      'SELECT document_id, author_id FROM documents WHERE document_id = $1',
       [documentId]
     );
 
@@ -201,6 +201,8 @@ const createQuestion = async (req, res, next) => {
       });
     }
 
+    const document = docResult.rows[0];
+
     const result = await query(
       `INSERT INTO questions (document_id, user_id, title, content)
        VALUES ($1, $2, $3, $4)
@@ -208,17 +210,19 @@ const createQuestion = async (req, res, next) => {
       [documentId, userId, title, content]
     );
 
-    // Award credits for asking question
-    await query(
-      `INSERT INTO credit_transactions (user_id, amount, transaction_type, description, reference_id)
-       VALUES ($1, 1, 'comment', 'Đặt câu hỏi về tài liệu', $2)`,
-      [userId, result.rows[0].question_id]
-    );
+    // Award credits for asking question (only if not asking about own document)
+    if (document.author_id !== userId) {
+      await query(
+        `INSERT INTO credit_transactions (user_id, amount, transaction_type, description, reference_id)
+         VALUES ($1, 1, 'comment', 'Đặt câu hỏi về tài liệu', $2)`,
+        [userId, result.rows[0].question_id]
+      );
 
-    await query(
-      'UPDATE users SET credits = credits + 1 WHERE user_id = $1',
-      [userId]
-    );
+      await query(
+        'UPDATE users SET credits = credits + 1 WHERE user_id = $1',
+        [userId]
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -247,7 +251,10 @@ const createAnswer = async (req, res, next) => {
 
     // Check if question exists
     const questionResult = await query(
-      'SELECT * FROM questions WHERE question_id = $1',
+      `SELECT q.*, d.author_id as document_author_id 
+       FROM questions q
+       JOIN documents d ON q.document_id = d.document_id
+       WHERE q.question_id = $1`,
       [questionId]
     );
 
@@ -258,6 +265,8 @@ const createAnswer = async (req, res, next) => {
       });
     }
 
+    const question = questionResult.rows[0];
+
     const result = await query(
       `INSERT INTO answers (question_id, user_id, content)
        VALUES ($1, $2, $3)
@@ -265,17 +274,19 @@ const createAnswer = async (req, res, next) => {
       [questionId, userId, content]
     );
 
-    // Award credits for answering
-    await query(
-      `INSERT INTO credit_transactions (user_id, amount, transaction_type, description, reference_id)
-       VALUES ($1, 2, 'comment', 'Trả lời câu hỏi', $2)`,
-      [userId, result.rows[0].answer_id]
-    );
+    // Award credits for answering (only if not answering about own document)
+    if (question.document_author_id !== userId) {
+      await query(
+        `INSERT INTO credit_transactions (user_id, amount, transaction_type, description, reference_id)
+         VALUES ($1, 2, 'comment', 'Trả lời câu hỏi', $2)`,
+        [userId, result.rows[0].answer_id]
+      );
 
-    await query(
-      'UPDATE users SET credits = credits + 2 WHERE user_id = $1',
-      [userId]
-    );
+      await query(
+        'UPDATE users SET credits = credits + 2 WHERE user_id = $1',
+        [userId]
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -316,6 +327,14 @@ const acceptAnswer = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         error: 'Chỉ tác giả câu hỏi mới có thể chấp nhận câu trả lời'
+      });
+    }
+
+    // Prevent accepting own answer (self-Q&A fraud)
+    if (answer.user_id === userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Không thể chấp nhận câu trả lời của chính mình'
       });
     }
 

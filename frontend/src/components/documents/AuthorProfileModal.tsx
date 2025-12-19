@@ -4,10 +4,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Modal, Row, Col, Card, Badge, Spinner, Alert, Tab, Tabs } from 'react-bootstrap';
+import { Modal, Row, Col, Card, Badge, Spinner, Alert, Tab, Tabs, Button } from 'react-bootstrap';
 import { FaFileAlt, FaDownload, FaEye, FaStar, FaUserPlus, FaTimes } from 'react-icons/fa';
 import { userService } from '../../services/userService';
 import { documentService } from '../../services/documentService';
+import { useAuth } from '../../hooks/useAuth';
+import { toast } from 'react-toastify';
 import DocumentCard from './DocumentCard';
 
 interface AuthorProfileModalProps {
@@ -25,6 +27,7 @@ interface AuthorProfile {
   major?: string;
   avatarUrl?: string;
   isVerifiedAuthor: boolean;
+  isFollowing?: boolean;
   stats: {
     documentCount: number;
     avgRating?: string;
@@ -34,11 +37,14 @@ interface AuthorProfile {
 }
 
 const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({ show, onHide, authorId }) => {
+  const { isAuthenticated, user } = useAuth();
   const [profile, setProfile] = useState<AuthorProfile | null>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     if (show && authorId) {
@@ -51,6 +57,7 @@ const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({ show, onHide, a
     try {
       setLoading(true);
       setError('');
+      console.log('🔍 Loading profile for:', authorId);
       const response = await userService.getUserProfile(authorId);
       if (response.success && response.data) {
         const userData = response.data;
@@ -63,6 +70,7 @@ const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({ show, onHide, a
           major: userData.major,
           avatarUrl: userData.avatarUrl,
           isVerifiedAuthor: userData.isVerifiedAuthor,
+          isFollowing: userData.isFollowing,
           stats: {
             documentCount: userData.stats?.documentCount || 0,
             avgRating: userData.stats?.avgRating,
@@ -70,6 +78,7 @@ const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({ show, onHide, a
             followingCount: userData.stats?.followingCount || 0
           }
         });
+        setIsFollowing(userData.isFollowing || false);
       }
     } catch (err: any) {
       console.error('Error loading author profile:', err);
@@ -102,6 +111,55 @@ const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({ show, onHide, a
 
   const calculateTotalViews = () => {
     return documents.reduce((sum, doc) => sum + (doc.viewCount || 0), 0);
+  };
+
+  const handleFollow = async () => {
+    if (!isAuthenticated) {
+      toast.error('Vui lòng đăng nhập để theo dõi tác giả');
+      return;
+    }
+
+    if (user?.id === authorId) {
+      toast.error('Không thể theo dõi chính mình');
+      return;
+    }
+
+    try {
+      setFollowLoading(true);
+      if (isFollowing) {
+        await userService.unfollowUser(authorId);
+        setIsFollowing(false);
+        toast.success('Đã bỏ theo dõi');
+        // Update follower count
+        if (profile) {
+          setProfile({
+            ...profile,
+            stats: {
+              ...profile.stats,
+              followerCount: profile.stats.followerCount - 1
+            }
+          });
+        }
+      } else {
+        await userService.followUser(authorId);
+        setIsFollowing(true);
+        toast.success('Đã theo dõi tác giả');
+        // Update follower count
+        if (profile) {
+          setProfile({
+            ...profile,
+            stats: {
+              ...profile.stats,
+              followerCount: profile.stats.followerCount + 1
+            }
+          });
+        }
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Có lỗi xảy ra');
+    } finally {
+      setFollowLoading(false);
+    }
   };
 
   return (
@@ -175,6 +233,26 @@ const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({ show, onHide, a
                   </Badge>
                 )}
               </div>
+
+              {/* Follow Button */}
+              {isAuthenticated && user?.id !== authorId && (
+                <div className="mb-3">
+                  <Button
+                    variant={isFollowing ? "outline-primary" : "primary"}
+                    size="sm"
+                    onClick={handleFollow}
+                    disabled={followLoading}
+                    className="px-4"
+                  >
+                    {followLoading ? (
+                      <Spinner size="sm" className="me-2" />
+                    ) : (
+                      <i className={`bi bi-person-${isFollowing ? 'check' : 'plus'} me-2`} />
+                    )}
+                    {isFollowing ? 'Đang theo dõi' : 'Theo dõi'}
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Stats Section */}

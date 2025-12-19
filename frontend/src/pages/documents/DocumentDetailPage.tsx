@@ -8,6 +8,7 @@ import { Container, Row, Col, Card, Button, Badge, Tab, Tabs, Spinner, Alert } f
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchDocumentById, toggleBookmark } from '../../store/slices/documentSlice';
+import { getCurrentUser } from '../../store/slices/authSlice';
 import { useAuth } from '../../hooks/useAuth';
 import { documentService } from '../../services/documentService';
 import { toast } from 'react-toastify';
@@ -16,6 +17,7 @@ import CommentSection from '../../components/comments/CommentSection';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import QuestionList from '../../components/QuestionList'; 
 import DocumentPreview from '../../components/DocumentPreview';
+import AuthorProfileModal from '../../components/documents/AuthorProfileModal';
 
 const DocumentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +28,8 @@ const DocumentDetailPage: React.FC = () => {
   
   const [isDownloading, setIsDownloading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [showAuthorModal, setShowAuthorModal] = useState(false);
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -58,11 +62,19 @@ const DocumentDetailPage: React.FC = () => {
       
       toast.success('Tải tài liệu thành công!');
       dispatch(fetchDocumentById(currentDocument.id));
+      
+      // Refresh user data to update credits in Navbar
+      dispatch(getCurrentUser());
     } catch (error: any) {
       toast.error(error.message || 'Không thể tải tài liệu');
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  const handleAuthorClick = (authorId: string) => {
+    setSelectedAuthorId(authorId);
+    setShowAuthorModal(true);
   };
 
   const handleBookmark = async () => {
@@ -88,14 +100,14 @@ const DocumentDetailPage: React.FC = () => {
     if (!currentDocument) return null;
     const rating = parseFloat(currentDocument.avgRating || '0');
     return (
-      <div className="d-flex align-items-center mb-3">
-        <div className="text-warning me-2">
+      <div className="d-flex align-items-center mb-2">
+        <div className="text-warning me-1 small">
            {[...Array(5)].map((_, i) => (
              <i key={i} className={`bi bi-star${i < Math.round(rating) ? '-fill' : ''}`} />
            ))}
         </div>
-        <span className="fw-bold">{rating.toFixed(1)}</span>
-        <span className="text-muted ms-1">({currentDocument.ratingCount || 0} đánh giá)</span>
+        <span className="fw-bold small">{rating.toFixed(1)}</span>
+        <span className="text-muted ms-1 small">({currentDocument.ratingCount || 0} đánh giá · {currentDocument.downloadCount} lượt tải)</span>
       </div>
     );
   };
@@ -116,109 +128,27 @@ const DocumentDetailPage: React.FC = () => {
 
   return (
     <Container className="py-4 mt-5">
-      <nav aria-label="breadcrumb" className="mb-4">
-        <ol className="breadcrumb">
-          <li className="breadcrumb-item"><Link to="/">Trang chủ</Link></li>
-          <li className="breadcrumb-item"><Link to="/documents">Tài liệu</Link></li>
-          <li className="breadcrumb-item active" aria-current="page">{currentDocument.title}</li>
-        </ol>
-      </nav>
+      <Button 
+        variant="link" 
+        className="mb-4 p-0 text-decoration-none"
+        onClick={() => navigate(-1)}
+      >
+        <i className="bi bi-arrow-left me-2"></i>
+        Quay lại
+      </Button>
 
       <Row>
         {/* --- LEFT COLUMN --- */}
         <Col lg={7}>
-          <Card className="shadow-sm mb-4 border-0">
-            <Card.Body>
-              <h1 className="h2 mb-3">{currentDocument.title}</h1>
-              
-              <div className="mb-3">
-                 <Badge bg="primary" className="me-2">{currentDocument.subject}</Badge>
-                 {currentDocument.author?.university && (
-                    <Badge bg="secondary">{currentDocument.author.university}</Badge>
-                 )}
-              </div>
-              
-              {renderRating()}
-
-              <div className="d-flex align-items-center mb-4 p-3 bg-light rounded">
-                <img 
-                  src={currentDocument.author.avatarUrl || 'https://via.placeholder.com/50'} 
-                  alt="Author" 
-                  className="rounded-circle me-3"
-                  width="50" height="50"
-                  style={{objectFit: 'cover'}}
-                />
-                <div>
-                  <div className="fw-bold">
-                    {currentDocument.author.fullName || currentDocument.author.username}
-                    {currentDocument.author.isVerifiedAuthor && <i className="bi bi-patch-check-fill text-primary ms-1" />}
-                  </div>
-                  <div className="text-muted small">
-                    Đăng ngày {new Date(currentDocument.createdAt).toLocaleDateString('vi-VN')}
-                  </div>
-                </div>
-              </div>
-
-              <div className="d-flex gap-2 mb-4">
-                <Button 
-                  variant="success" 
-                  size="lg" 
-                  className="flex-grow-1"
-                  onClick={handleDownload}
-                  disabled={isDownloading}
-                >
-                  {isDownloading ? <Spinner size="sm" /> : <i className="bi bi-download me-2" />}
-                  Tải xuống ({currentDocument.creditCost === 0 ? 'Miễn phí' : `${currentDocument.creditCost} Credits`})
-                </Button>
-                <Button 
-                  variant={currentDocument.userInteraction?.isBookmarked ? "warning" : "outline-warning"}
-                  onClick={handleBookmark}
-                >
-                  <i className={`bi bi-bookmark${currentDocument.userInteraction?.isBookmarked ? '-fill' : ''}`} />
-                </Button>
-              </div>
-
-              <div className="mb-4">
-                <h5>Mô tả</h5>
-                <p className="text-secondary" style={{ whiteSpace: 'pre-line' }}>{currentDocument.description}</p>
-              </div>
-            </Card.Body>
-          </Card>
-
-          {/* TABS for Q&A, Comments, Ratings */}
-          <Card className="shadow-sm border-0">
-            <Card.Body>
-              <Tabs activeKey={activeTab} onSelect={(k) => setActiveTab(k || 'questions')} className="mb-4">
-                {/* 1. Q&A Tab */}
-                <Tab eventKey="questions" title="Hỏi & Đáp">
-                  <QuestionList documentId={currentDocument.id} />
-                </Tab>
-                
-                {/* 2. Comments Tab */}
-                <Tab eventKey="comments" title="Bình luận">
-                  <CommentSection documentId={currentDocument.id} />
-                </Tab>
-
-                {/* 3. Ratings Tab */}
-                <Tab eventKey="ratings" title={`Đánh giá (${currentDocument.ratingCount})`}>
-                  <RatingComponent documentId={currentDocument.id} />
-                </Tab>
-              </Tabs>
-            </Card.Body>
-          </Card>
-        </Col>
-
-        {/* --- RIGHT COLUMN (Preview) --- */}
-        <Col lg={5}>
           <div className="sticky-top" style={{ top: '100px', zIndex: 1 }}>
             <Card className="shadow-sm border-0">
-              <Card.Header className="bg-white fw-bold py-3 border-bottom">
+              <Card.Header className="fw-bold py-3 border-bottom">
                 <i className="bi bi-eye me-2"></i> Xem trước tài liệu
               </Card.Header>
               <Card.Body className="p-0">
                 <DocumentPreview documentId={currentDocument.id} />
               </Card.Body>
-              <Card.Footer className="bg-light text-center small text-muted">
+              <Card.Footer className="text-center small text-muted">
                 Bạn đang xem bản xem trước giới hạn.
               </Card.Footer>
             </Card>
@@ -239,7 +169,112 @@ const DocumentDetailPage: React.FC = () => {
             )}
           </div>
         </Col>
+        
+        {/* --- RIGHT COLUMN (Preview) --- */}
+        <Col lg={5}>
+            <Card className="shadow-sm mb-3 border-0">
+            <Card.Body className="p-3">
+              <h1 className="h3 mb-2">{currentDocument.title}</h1>
+              
+              <div className="mb-2">
+               <Badge bg="primary" className="me-2">{currentDocument.subject}</Badge>
+               {currentDocument.author?.university && (
+                <Badge bg="secondary">{currentDocument.author.university}</Badge>
+               )}
+              </div>
+              
+              {renderRating()}
+
+              <div className="d-flex align-items-center justify-content-between mb-3 p-2 rounded">
+              <div 
+                className="d-flex align-items-center" 
+                onClick={() => {
+                  console.log('🖱️ Author clicked, ID:', currentDocument.author.id, 'Full author:', currentDocument.author);
+                  handleAuthorClick(currentDocument.author.id);
+                }}
+                style={{cursor: 'pointer'}}
+                role="button"
+              >
+                <img 
+                src={currentDocument.author.avatarUrl || 'https://via.placeholder.com/50'} 
+                alt="Author" 
+                className="rounded-circle me-2"
+                width="40" height="40"
+                style={{objectFit: 'cover'}}
+                />
+                <div>
+                <div className="fw-bold small">
+                  {currentDocument.author.fullName || currentDocument.author.username}
+                  {currentDocument.author.isVerifiedAuthor && <i className="bi bi-patch-check-fill text-primary ms-1" />}
+                </div>
+                <div className="text-muted" style={{fontSize: '0.75rem'}}>
+                  {new Date(currentDocument.createdAt).toLocaleDateString('vi-VN')}
+                </div>
+                </div>
+              </div>
+
+              <div className="d-flex gap-2">
+                <Button 
+                variant="success" 
+                size="sm"
+                onClick={handleDownload}
+                disabled={isDownloading}
+                >
+                {isDownloading ? <Spinner size="sm" /> : <i className="bi bi-download me-1" />}
+                {currentDocument.creditCost === 0 ? 'Miễn phí' : `${currentDocument.creditCost} Credits`}
+                </Button>
+                <Button 
+                variant={currentDocument.userInteraction?.isBookmarked ? "warning" : "outline-warning"}
+                size="sm"
+                onClick={handleBookmark}
+                >
+                <i className={`bi bi-bookmark${currentDocument.userInteraction?.isBookmarked ? '-fill' : ''}`} />
+                </Button>
+              </div>
+              </div>
+
+              <div className="mb-2">
+              <h6 className="mb-2">Mô tả</h6>
+              <p className="text-secondary small mb-0" style={{ whiteSpace: 'pre-line' }}>{currentDocument.description}</p>
+              </div>
+            </Card.Body>
+          </Card>
+
+          
+
+          {/* TABS for Q&A, Comments, Ratings */}
+          <Card className="shadow-sm border-0">
+            <Card.Body className="p-3">
+              <Tabs activeKey={activeTab} onSelect={(k) => setActiveTab(k || 'questions')} className="mb-3">
+                {/* 1. Q&A Tab */}
+                <Tab eventKey="questions" title={`Q&A (${currentDocument.questionCount || 0})`}>
+                  <QuestionList documentId={currentDocument.id} />
+                </Tab>
+                
+                {/* 2. Comments Tab */}
+                {/*
+                <Tab eventKey="comments" title={`Bình luận (${currentDocument.commentCount || 0})`}>
+                  <CommentSection documentId={currentDocument.id} />
+                </Tab>
+                */}
+
+                {/* 3. Ratings Tab */}
+                <Tab eventKey="ratings" title={`Đánh giá (${currentDocument.ratingCount})`}>
+                  <RatingComponent documentId={currentDocument.id} />
+                </Tab>
+              </Tabs>
+            </Card.Body>
+          </Card>
+        </Col>
+
       </Row>
+
+      {/* Author Profile Modal */}
+      <AuthorProfileModal
+        show={showAuthorModal}
+        onHide={() => setShowAuthorModal(false)}
+        authorId={selectedAuthorId || ''}
+      />
     </Container>
   );
 };

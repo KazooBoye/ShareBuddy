@@ -9,6 +9,8 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { useAppDispatch } from '../store/hooks';
+import { getCurrentUser } from '../store/slices/authSlice';
 
 interface CreditPackage {
   package_id: string;
@@ -133,6 +135,7 @@ const CheckoutForm: React.FC<{ selectedPackage: CreditPackage | null; onSuccess:
 
 const PurchaseCreditsPage: React.FC = () => {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const { isAuthenticated, user } = useAuth();
 
   const [packages, setPackages] = useState<CreditPackage[]>([]);
@@ -182,6 +185,10 @@ const PurchaseCreditsPage: React.FC = () => {
   const handlePaymentSuccess = () => {
     setShowCheckout(false);
     setSelectedPackage(null);
+    
+    // Refresh user data to update credits in Navbar
+    dispatch(getCurrentUser());
+    
     alert('Payment successful! Your credits have been added.');
     navigate('/profile');
   };

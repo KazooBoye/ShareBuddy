@@ -89,14 +89,14 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId }) => {
 
         {/* Pagination Controls */}
         {numPages && (
-          <div className="bg-white border-top p-2 d-flex justify-content-between align-items-center">
+          <div className="border-top p-2 d-flex justify-content-between align-items-center">
             <Button 
               variant="outline-secondary" 
               size="sm" 
               disabled={pageNumber <= 1} 
               onClick={() => setPageNumber(p => p - 1)}
             >
-              <i className="bi bi-chevron-left" /> Trước
+              <i className="bi bi-chevron-left" />
             </Button>
             
             <span className="small text-muted fw-bold">
@@ -109,16 +109,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ documentId }) => {
               disabled={pageNumber >= numPages} 
               onClick={() => setPageNumber(p => p + 1)}
             >
-              Sau <i className="bi bi-chevron-right" />
+              <i className="bi bi-chevron-right" />
             </Button>
           </div>
         )}
-        
-        <div className="bg-light text-center py-1 border-top">
-          <small className="text-muted" style={{fontSize: '0.75rem'}}>
-            Đang xem bản xem trước {info.previewPages > 0 ? `${info.previewPages} trang` : ''}.
-          </small>
-        </div>
       </div>
     );
   }

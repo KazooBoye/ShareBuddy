@@ -29,9 +29,10 @@ const rateDocument = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Tài liệu không tồn tại' });
     }
 
-    // if (docResult.rows[0].author_id === userId) {
-    //   return res.status(403).json({ success: false, error: 'Không thể đánh giá tài liệu của chính mình' });
-    // }
+    // Prevent self-rating
+    if (docResult.rows[0].author_id === userId) {
+      return res.status(403).json({ success: false, error: 'Không thể đánh giá tài liệu của chính mình' });
+    }
 
     let ratingData;
 
@@ -87,6 +88,17 @@ const rateDocument = async (req, res, next) => {
         } else if (existingComment.rows.length > 0) {
           await client.query('DELETE FROM comments WHERE comment_id = $1', [existingComment.rows[0].comment_id]);
         }
+      }
+    });
+
+    // Check and auto-verify document author if eligible (async, non-blocking)
+    const authorId = docResult.rows[0].author_id;
+    setImmediate(async () => {
+      try {
+        const verifiedAuthorService = require('../services/verifiedAuthorService');
+        await verifiedAuthorService.checkAndAutoVerify(authorId);
+      } catch (err) {
+        console.error('⚠️ Auto-verification check failed:', err.message);
       }
     });
 

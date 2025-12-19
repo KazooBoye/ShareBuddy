@@ -1,161 +1,153 @@
 /**
- * Preview Controller - Generate and serve document previews (PDF & Office)
+ * Preview Controller - Generate and serve document previews
  */
 
 const { PDFDocument } = require('pdf-lib');
 const { createCanvas } = require('canvas');
 const fs = require('fs').promises;
-const fsSync = require('fs'); // Needed for libreoffice-convert
 const path = require('path');
 const { query } = require('../config/database');
-const libre = require('libreoffice-convert');
-const util = require('util');
-const convertAsync = util.promisify(libre.convert);
 
-const PREVIEW_PAGE_LIMIT = 10; // Updated to 10 pages
-
-const resolveFilePath = (dbPath) => {
-  if (!dbPath) return null;
-  const cleanPath = dbPath.startsWith('/') ? dbPath.slice(1) : dbPath;
-  return path.join(process.cwd(), cleanPath);
-};
-
-// Helper: Convert Office file buffer to PDF buffer
-const convertToPdf = async (inputBuffer, ext) => {
+// Generate preview for a document
+const generatePreview = async (req, res, next) => {
   try {
-    const pdfBuf = await convertAsync(inputBuffer, '.pdf', undefined);
-    return pdfBuf;
-  } catch (err) {
-    console.error(`Error converting ${ext} to PDF:`, err);
-    return null;
-  }
-};
+    const { documentId } = req.params;
 
-// Internal function to generate preview
-const generatePreviewInternal = async (documentId) => {
-  try {
+    // Get document info
     const docResult = await query(
-      'SELECT document_id, file_path, file_name, file_type FROM documents WHERE document_id = $1',
+      'SELECT * FROM documents WHERE document_id = $1',
       [documentId]
     );
 
-    if (docResult.rows.length === 0) return { success: false, error: 'Not found' };
+    if (docResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tài liệu không tồn tại'
+      });
+    }
 
     const document = docResult.rows[0];
-    const filePath = resolveFilePath(document.file_path);
-    // Normalize file type (remove dot if present)
-    const fileType = document.file_type ? document.file_type.toLowerCase().replace('.', '') : 'unknown';
+    const filePath = path.join(process.cwd(), 'uploads', document.file_path);
 
-    // Verify file exists
+    // Check if file exists
     try {
       await fs.access(filePath);
-    } catch (e) {
-      return { success: false, error: 'File missing' };
-    }
-
-    let pdfDoc = null;
-    let originalFileBytes = await fs.readFile(filePath);
-
-    // 1. LOAD OR CONVERT TO PDF
-    if (fileType === 'pdf') {
-      pdfDoc = await PDFDocument.load(originalFileBytes);
-    } else if (['docx', 'doc', 'pptx', 'ppt'].includes(fileType)) {
-      console.log(`[Preview] Converting ${fileType} to PDF for preview extraction...`);
-      // Convert Office to PDF Buffer
-      const pdfBuffer = await convertToPdf(originalFileBytes, fileType);
-      if (pdfBuffer) {
-        pdfDoc = await PDFDocument.load(pdfBuffer);
-      } else {
-        console.warn('[Preview] Office conversion failed. LibreOffice might be missing.');
-      }
-    }
-
-    // 2. EXTRACT FIRST 10 PAGES
-    let dbPreviewUrl = null;
-    let actualPreviewPages = 0;
-
-    if (pdfDoc) {
-      const totalPages = pdfDoc.getPageCount();
-      actualPreviewPages = Math.min(totalPages, PREVIEW_PAGE_LIMIT);
-
-      const previewPdf = await PDFDocument.create();
-      const pages = await previewPdf.copyPages(pdfDoc, Array.from({ length: actualPreviewPages }, (_, i) => i));
-      
-      pages.forEach(page => {
-        // Optional: Add Watermark
-        const { width, height } = page.getSize();
-        page.drawText('PREVIEW - ShareBuddy', {
-          x: width / 2 - 150,
-          y: height / 2,
-          size: 40,
-          opacity: 0.15,
-          rotate: { angle: 45, type: 'degrees' }
-        });
-        previewPdf.addPage(page);
+    } catch (error) {
+      return res.status(404).json({
+        success: false,
+        error: 'File tài liệu không tồn tại'
       });
-
-      const previewBytes = await previewPdf.save();
-
-      // Save to uploads/previews
-      const previewDir = path.join(process.cwd(), 'uploads', 'previews');
-      await fs.mkdir(previewDir, { recursive: true });
-      
-      const previewFileName = `preview_${documentId}.pdf`;
-      const previewPathFull = path.join(previewDir, previewFileName);
-      
-      await fs.writeFile(previewPathFull, previewBytes);
-      
-      dbPreviewUrl = `/uploads/previews/${previewFileName}`;
-    } else {
-      // Fallback if conversion failed or unsupported type:
-      // We can't generate a 10-page preview for non-PDFs without conversion.
-      // Mark as generated but null URL (frontend will show "Preview not available" or Thumbnail)
-      console.log('[Preview] Could not generate PDF preview for this file type.');
     }
 
-    // 3. UPDATE DATABASE
+    // Read PDF file
+    const pdfBytes = await fs.readFile(filePath);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    
+    const totalPages = pdfDoc.getPageCount();
+    const previewPages = Math.min(totalPages, 5); // Preview first 5 pages
+
+    // Create new PDF with only preview pages
+    const previewPdf = await PDFDocument.create();
+    const pages = await previewPdf.copyPages(pdfDoc, Array.from({ length: previewPages }, (_, i) => i));
+    
+    pages.forEach(page => {
+      previewPdf.addPage(page);
+    });
+
+    // Add watermark to each page
+    for (let i = 0; i < previewPdf.getPageCount(); i++) {
+      const page = previewPdf.getPage(i);
+      const { width, height } = page.getSize();
+      
+      page.drawText('PREVIEW - ShareBuddy', {
+        x: width / 2 - 100,
+        y: height / 2,
+        size: 50,
+        opacity: 0.1,
+        rotate: { angle: 45, type: 'degrees' }
+      });
+    }
+
+    const previewBytes = await previewPdf.save();
+
+    // Save preview file
+    const previewDir = path.join(process.cwd(), 'uploads', 'previews');
+    await fs.mkdir(previewDir, { recursive: true });
+    
+    const previewFileName = `preview_${documentId}.pdf`;
+    const previewPath = path.join(previewDir, previewFileName);
+    
+    await fs.writeFile(previewPath, previewBytes);
+
+    // Update database
     await query(
-      `UPDATE documents 
-       SET preview_url = $1, 
-           preview_pages = $2, 
-           preview_generated = TRUE 
-       WHERE document_id = $3`,
-      [dbPreviewUrl, actualPreviewPages, documentId]
+      'UPDATE documents SET preview_path = $1, preview_pages = $2 WHERE document_id = $3',
+      [`previews/${previewFileName}`, previewPages, documentId]
     );
 
-    return { success: true, previewUrl: dbPreviewUrl };
-
+    res.json({
+      success: true,
+      message: 'Preview đã được tạo',
+      data: {
+        previewPath: `/api/preview/${documentId}`,
+        previewPages,
+        totalPages
+      }
+    });
   } catch (error) {
-    console.error('Internal preview generation failed:', error);
-    return { success: false, error: error.message };
+    console.error('Preview generation error:', error);
+    next(error);
   }
-};
-
-// API Endpoint Wrapper
-const generatePreview = async (req, res, next) => {
-  const result = await generatePreviewInternal(req.params.documentId);
-  if (!result.success) {
-    return res.status(400).json(result);
-  }
-  res.json({ success: true, message: 'Preview generated', data: result });
 };
 
 // Serve preview file
 const servePreview = async (req, res, next) => {
   try {
     const { documentId } = req.params;
-    const docResult = await query('SELECT preview_url, title FROM documents WHERE document_id = $1', [documentId]);
 
-    if (docResult.rows.length === 0) return res.status(404).json({ success: false, error: 'Not found' });
+    // Get document info
+    const docResult = await query(
+      'SELECT preview_path, title FROM documents WHERE document_id = $1',
+      [documentId]
+    );
+
+    if (docResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tài liệu không tồn tại'
+      });
+    }
+
     const document = docResult.rows[0];
-
-    if (!document.preview_url) return res.status(404).json({ success: false, error: 'No preview available' });
-
-    const previewPath = resolveFilePath(document.preview_url);
     
-    // Always serve as PDF because we converted it
+    if (!document.preview_path) {
+      return res.status(404).json({
+        success: false,
+        error: 'Preview chưa được tạo. Vui lòng tạo preview trước.'
+      });
+    }
+
+    const previewPath = path.join(process.cwd(), 'uploads', document.preview_path);
+
+    // Check if preview exists
+    try {
+      await fs.access(previewPath);
+    } catch (error) {
+      return res.status(404).json({
+        success: false,
+        error: 'File preview không tồn tại'
+      });
+    }
+
+    // Increment preview count
+    await query(
+      'UPDATE documents SET preview_count = preview_count + 1 WHERE document_id = $1',
+      [documentId]
+    );
+
+    // Set headers and send file
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="preview_${encodeURIComponent(document.title)}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="preview_${document.title}.pdf"`);
     
     const fileBuffer = await fs.readFile(previewPath);
     res.send(fileBuffer);
@@ -164,74 +156,265 @@ const servePreview = async (req, res, next) => {
   }
 };
 
-const serveThumbnail = async (req, res, next) => {
-    try {
-        const { documentId } = req.params;
-        const docResult = await query('SELECT thumbnail_url FROM documents WHERE document_id = $1', [documentId]);
-        if (docResult.rows.length === 0 || !docResult.rows[0].thumbnail_url) {
-            return res.status(404).send('No thumbnail');
-        }
-        const p = resolveFilePath(docResult.rows[0].thumbnail_url);
-        const b = await fs.readFile(p);
-        res.setHeader('Content-Type', 'image/png');
-        res.send(b);
-    } catch(e) { next(e); }
-}
-
+// Generate thumbnail for document
 const generateThumbnail = async (req, res, next) => {
+  try {
+    const { documentId } = req.params;
+    const width = parseInt(req.query.width) || 300;
+    const height = parseInt(req.query.height) || 400;
+
+    // Get document info
+    const docResult = await query(
+      'SELECT file_path FROM documents WHERE document_id = $1',
+      [documentId]
+    );
+
+    if (docResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tài liệu không tồn tại'
+      });
+    }
+
+    const document = docResult.rows[0];
+    const filePath = path.join(process.cwd(), 'uploads', document.file_path);
+
+    // Read PDF
+    const pdfBytes = await fs.readFile(filePath);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const firstPage = pdfDoc.getPage(0);
+    const { width: pdfWidth, height: pdfHeight } = firstPage.getSize();
+
+    // Calculate scale
+    const scale = Math.min(width / pdfWidth, height / pdfHeight);
+    const canvasWidth = Math.floor(pdfWidth * scale);
+    const canvasHeight = Math.floor(pdfHeight * scale);
+
+    // Create canvas
+    const canvas = createCanvas(canvasWidth, canvasHeight);
+    const ctx = canvas.getContext('2d');
+
+    // Draw white background
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // Draw placeholder (actual PDF rendering would require pdf.js or similar)
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(20, 20, canvasWidth - 40, canvasHeight - 40);
+    
+    ctx.fillStyle = '#666';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('PDF Preview', canvasWidth / 2, canvasHeight / 2);
+
+    // Save thumbnail
+    const thumbnailDir = path.join(process.cwd(), 'uploads', 'thumbnails');
+    await fs.mkdir(thumbnailDir, { recursive: true });
+    
+    const thumbnailFileName = `thumb_${documentId}.png`;
+    const thumbnailPath = path.join(thumbnailDir, thumbnailFileName);
+    
+    const buffer = canvas.toBuffer('image/png');
+    await fs.writeFile(thumbnailPath, buffer);
+
+    // Update database
+    await query(
+      'UPDATE documents SET thumbnail_path = $1 WHERE document_id = $2',
+      [`thumbnails/${thumbnailFileName}`, documentId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Thumbnail đã được tạo',
+      data: {
+        thumbnailPath: `/api/preview/thumbnail/${documentId}`,
+        width: canvasWidth,
+        height: canvasHeight
+      }
+    });
+  } catch (error) {
+    console.error('Thumbnail generation error:', error);
+    next(error);
+  }
+};
+
+// Serve thumbnail
+const serveThumbnail = async (req, res, next) => {
+  try {
+    const { documentId } = req.params;
+
+    // Get document info
+    const docResult = await query(
+      'SELECT thumbnail_path FROM documents WHERE document_id = $1',
+      [documentId]
+    );
+
+    if (docResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tài liệu không tồn tại'
+      });
+    }
+
+    const document = docResult.rows[0];
+    
+    if (!document.thumbnail_path) {
+      return res.status(404).json({
+        success: false,
+        error: 'Thumbnail chưa được tạo'
+      });
+    }
+
+    const thumbnailPath = path.join(process.cwd(), 'uploads', document.thumbnail_path);
+
     try {
-        const { documentId } = req.params;
-        const docResult = await query('SELECT file_type FROM documents WHERE document_id = $1', [documentId]);
-        const fileType = docResult.rows[0]?.file_type || 'DOC';
+      await fs.access(thumbnailPath);
+    } catch (error) {
+      return res.status(404).json({
+        success: false,
+        error: 'File thumbnail không tồn tại'
+      });
+    }
 
-        const canvas = createCanvas(300, 400);
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#f8f9fa';
-        ctx.fillRect(0,0,300,400);
-        ctx.fillStyle = '#333';
-        ctx.font = '30px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(fileType.toUpperCase(), 150, 200);
-        
-        const dir = path.join(process.cwd(), 'uploads', 'thumbnails');
-        await fs.mkdir(dir, {recursive:true});
-        const p = path.join(dir, `thumb_${documentId}.png`);
-        await fs.writeFile(p, canvas.toBuffer('image/png'));
-        
-        const dbUrl = `/uploads/thumbnails/thumb_${documentId}.png`;
-        await query('UPDATE documents SET thumbnail_url=$1 WHERE document_id=$2', [dbUrl, documentId]);
-        res.json({success:true, thumbnailUrl: dbUrl});
-    } catch(e) { next(e); }
-}
+    res.setHeader('Content-Type', 'image/png');
+    
+    const fileBuffer = await fs.readFile(thumbnailPath);
+    res.send(fileBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
 
+// Get preview info
 const getPreviewInfo = async (req, res, next) => {
-    try {
-        const { documentId } = req.params;
-        const result = await query(
-            'SELECT document_id, title, preview_url, preview_pages, thumbnail_url, view_count, file_size, preview_generated, file_type FROM documents WHERE document_id = $1',
-            [documentId]
+  try {
+    const { documentId } = req.params;
+
+    const result = await query(
+      `SELECT 
+        document_id,
+        title,
+        preview_path,
+        preview_pages,
+        preview_count,
+        thumbnail_path,
+        page_count,
+        file_size
+       FROM documents 
+       WHERE document_id = $1`,
+      [documentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tài liệu không tồn tại'
+      });
+    }
+
+    const doc = result.rows[0];
+
+    res.json({
+      success: true,
+      data: {
+        documentId: doc.document_id,
+        title: doc.title,
+        hasPreview: !!doc.preview_path,
+        hasThumbnail: !!doc.thumbnail_path,
+        previewPages: doc.preview_pages,
+        totalPages: doc.page_count,
+        previewCount: doc.preview_count,
+        fileSize: doc.file_size,
+        previewUrl: doc.preview_path ? `/api/preview/${documentId}` : null,
+        thumbnailUrl: doc.thumbnail_path ? `/api/preview/thumbnail/${documentId}` : null
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Batch generate previews (admin only)
+const batchGeneratePreviews = async (req, res, next) => {
+  try {
+    const { documentIds } = req.body;
+
+    if (!Array.isArray(documentIds) || documentIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Document IDs phải là mảng không rỗng'
+      });
+    }
+
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    for (const documentId of documentIds) {
+      try {
+        // Get document
+        const docResult = await query(
+          'SELECT * FROM documents WHERE document_id = $1',
+          [documentId]
         );
-        if (result.rows.length === 0) return res.status(404).json({ success: false });
-        const doc = result.rows[0];
+
+        if (docResult.rows.length === 0) {
+          results.failed.push({ documentId, reason: 'Không tìm thấy' });
+          continue;
+        }
+
+        const document = docResult.rows[0];
+        const filePath = path.join(process.cwd(), 'uploads', document.file_path);
+
+        // Generate preview
+        const pdfBytes = await fs.readFile(filePath);
+        const pdfDoc = await PDFDocument.load(pdfBytes);
         
-        res.json({
-            success: true,
-            data: {
-                ...doc,
-                hasPreview: !!doc.preview_url,
-                // Ensure URLs are accessible
-                previewUrl: doc.preview_url ? `/api/preview/${documentId}` : null,
-                thumbnailUrl: doc.thumbnail_url ? `/api/preview/thumbnail/${documentId}` : null,
-            }
-        });
-    } catch(e) { next(e); }
-}
+        const totalPages = pdfDoc.getPageCount();
+        const previewPages = Math.min(totalPages, 5);
+
+        const previewPdf = await PDFDocument.create();
+        const pages = await previewPdf.copyPages(pdfDoc, Array.from({ length: previewPages }, (_, i) => i));
+        
+        pages.forEach(page => previewPdf.addPage(page));
+
+        const previewBytes = await previewPdf.save();
+
+        const previewDir = path.join(process.cwd(), 'uploads', 'previews');
+        await fs.mkdir(previewDir, { recursive: true });
+        
+        const previewFileName = `preview_${documentId}.pdf`;
+        const previewPath = path.join(previewDir, previewFileName);
+        
+        await fs.writeFile(previewPath, previewBytes);
+
+        await query(
+          'UPDATE documents SET preview_path = $1, preview_pages = $2 WHERE document_id = $3',
+          [`previews/${previewFileName}`, previewPages, documentId]
+        );
+
+        results.success.push(documentId);
+      } catch (error) {
+        results.failed.push({ documentId, reason: error.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Đã tạo ${results.success.length}/${documentIds.length} previews`,
+      data: results
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 module.exports = {
   generatePreview,
-  generatePreviewInternal,
   servePreview,
   generateThumbnail,
   serveThumbnail,
   getPreviewInfo,
+  batchGeneratePreviews
 };

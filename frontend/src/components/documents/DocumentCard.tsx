@@ -10,6 +10,7 @@ import { Document } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppDispatch } from '../../store/hooks';
 import { toggleBookmark } from '../../store/slices/documentSlice';
+import { getCurrentUser } from '../../store/slices/authSlice';
 import { documentService } from '../../services/documentService';
 import { toast } from 'react-toastify';
 
@@ -108,6 +109,9 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
       
       toast.success('Tải xuống thành công!');
       if (onDownload) onDownload(doc.id);
+      
+      // Refresh user data to update credits in Navbar
+      dispatch(getCurrentUser());
       
     } catch (error) {
       console.error('Download error:', error);
@@ -262,11 +266,7 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
         {/* Upload Time and Actions Row */}
         <div className="d-flex align-items-center justify-content-between mb-2 gap-3">
           <small className="text-muted fst-italic" style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-            {new Date(doc.createdAt).toLocaleDateString('vi-VN', { 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
+            {new Date(doc.createdAt).toLocaleDateString('vi-VN')}
           </small>
           
           {/* Action Buttons */}

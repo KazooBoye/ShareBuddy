@@ -201,6 +201,16 @@ const getDocuments = async (req, res, next) => {
     const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
 
+    // Check bookmarks for authenticated users
+    let bookmarkedDocIds = [];
+    if (req.user) {
+      const bookmarksQuery = await query(
+        'SELECT document_id FROM bookmarks WHERE user_id = $1',
+        [req.user.user_id]
+      );
+      bookmarkedDocIds = bookmarksQuery.rows.map(row => row.document_id);
+    }
+
     res.json({
       success: true,
       data: {
@@ -223,7 +233,11 @@ const getDocuments = async (req, res, next) => {
             fullName: row.full_name,
             avatarUrl: row.avatar_url,
             isVerifiedAuthor: row.is_verified_author
-          }
+          },
+          userInteraction: req.user ? {
+            isBookmarked: bookmarkedDocIds.includes(row.document_id),
+            canDownload: req.user.user_id === row.user_id || req.user.credits >= row.credit_cost
+          } : null
         })),
         page,
         totalPages,
@@ -244,17 +258,32 @@ const getDocument = async (req, res, next) => {
 
     const result = await query(
       `SELECT d.document_id, d.title, d.description, d.file_url, d.thumbnail_url,
-              d.subject, d.credit_cost, d.download_count, d.status,
+              d.subject, d.credit_cost, d.download_count, d.status, d.author_id,
               d.created_at, d.updated_at,
               u.user_id, u.username, u.full_name, u.avatar_url, u.is_verified_author,
               u.university, u.major,
-              AVG(r.rating) as avg_rating,
-              COUNT(r.rating_id) as rating_count
+              COALESCE(rating_stats.avg_rating, 0) as avg_rating,
+              COALESCE(rating_stats.rating_count, 0)::integer as rating_count,
+              COALESCE(question_stats.question_count, 0)::integer as question_count,
+              COALESCE(comment_stats.comment_count, 0)::integer as comment_count
        FROM documents d
        JOIN users u ON d.author_id = u.user_id
-       LEFT JOIN ratings r ON d.document_id = r.document_id
-       WHERE d.document_id = $1
-       GROUP BY d.document_id, u.user_id`,
+       LEFT JOIN (
+         SELECT document_id, AVG(rating) as avg_rating, COUNT(*)::integer as rating_count
+         FROM ratings
+         GROUP BY document_id
+       ) rating_stats ON d.document_id = rating_stats.document_id
+       LEFT JOIN (
+         SELECT document_id, COUNT(*)::integer as question_count
+         FROM questions
+         GROUP BY document_id
+       ) question_stats ON d.document_id = question_stats.document_id
+       LEFT JOIN (
+         SELECT document_id, COUNT(*)::integer as comment_count
+         FROM comments
+         GROUP BY document_id
+       ) comment_stats ON d.document_id = comment_stats.document_id
+       WHERE d.document_id = $1`,
       [id]
     );
 
@@ -326,7 +355,9 @@ const getDocument = async (req, res, next) => {
           downloadCount: document.download_count,
           status: document.status,
           avgRating: document.avg_rating ? parseFloat(document.avg_rating).toFixed(1) : null,
-          ratingCount: parseInt(document.rating_count),
+          ratingCount: parseInt(document.rating_count) || 0,
+          questionCount: parseInt(document.question_count) || 0,
+          commentCount: parseInt(document.comment_count) || 0,
           createdAt: document.created_at,
           updatedAt: document.updated_at,
           author: {
@@ -491,6 +522,16 @@ const uploadDocument = async (req, res, next) => {
     console.log(`[${requestId}] ℹ️ Credit will be awarded after moderation approval`);
     console.log(`[${requestId}] 🎉 Document uploaded successfully - awaiting moderation`);
 
+    // Check and auto-verify user if eligible (async, non-blocking)
+    setImmediate(async () => {
+      try {
+        const verifiedAuthorService = require('../services/verifiedAuthorService');
+        await verifiedAuthorService.checkAndAutoVerify(userId);
+      } catch (err) {
+        console.error(`[${requestId}] ⚠️ Auto-verification check failed:`, err.message);
+      }
+    });
+
     res.status(201).json({
       success: true,
       message: 'Tài liệu đã được tải lên và đang được kiểm duyệt. Bạn sẽ nhận được thông báo khi tài liệu được phê duyệt.',
@@ -547,7 +588,7 @@ const downloadDocument = async (req, res, next) => {
       [userId, id]
     );
 
-    if (existingDownload.rows.length > 0 || document.user_id === userId) {
+    if (existingDownload.rows.length > 0 || document.author_id === userId) {
       // Already downloaded or is owner - allow free download
       return res.json({
         success: true,

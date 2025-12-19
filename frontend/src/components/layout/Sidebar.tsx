@@ -58,6 +58,19 @@ const Sidebar: React.FC = () => {
                 Đã lưu
               </Nav.Link>
             </Nav.Item>
+
+            {!user?.isVerifiedAuthor && (
+              <Nav.Item>
+                <Nav.Link
+                  as={Link}
+                  to="/verified-author-progress"
+                  className={isActive('/verified-author-progress') ? 'active' : ''}
+                >
+                  <i className="bi bi-award me-2"></i>
+                  Verified Author
+                </Nav.Link>
+              </Nav.Item>
+            )}
           </>
         )}
 
@@ -76,6 +89,25 @@ const Sidebar: React.FC = () => {
               </Nav.Link>
             </Nav.Item>
           </>
+        )}
+
+        {/* Purchase Credits - Prominent CTA at bottom */}
+        {isAuthenticated && (
+          <div className="mt-auto pt-3">
+            <hr className="my-2" />
+            <Nav.Item>
+              <Nav.Link
+                as={Link}
+                to="/purchase-credits"
+                className={`purchase-credits-link ${isActive('/purchase-credits') ? 'active' : ''}`}
+              >
+                <div className="d-flex align-items-left justify-content-left py-1 px-1">
+                  <i className="bi bi-coin fs-6 me-2" style={{ color: '#271504ff' }}></i>
+                  <span className="fw-bold" style={{ fontSize: '0.9rem' }}>Mua Credits</span>
+                </div>
+              </Nav.Link>
+            </Nav.Item>
+          </div>
         )}
       </Nav>
     </div>

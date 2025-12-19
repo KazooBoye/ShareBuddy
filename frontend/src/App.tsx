@@ -31,9 +31,8 @@ import DocumentsPage from './pages/documents/DocumentsPage';
 import UploadPage from './pages/documents/UploadPage';
 import ProfilePage from './pages/user/ProfilePage';
 import AdminPage from './pages/admin/AdminPage';
-import QuestionDetailPage from './pages/QuestionDetailPage';
 import VerifiedAuthorsPage from './pages/VerifiedAuthorsPage';
-import VerifiedAuthorRequestPage from './pages/VerifiedAuthorRequestPage';
+import VerifiedAuthorProgressPage from './pages/VerifiedAuthorProgressPage';
 import PurchaseCreditsPage from './pages/PurchaseCreditsPage';
 import PaymentHistoryPage from './pages/PaymentHistoryPage';
 import SearchPage from './pages/SearchPage';
@@ -79,7 +78,6 @@ const AppContent: React.FC = () => {
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/documents/:id" element={<DocumentDetailPage />} />
               <Route path="/bookmarked" element={<BookmarkedDocumentsPage />} />
-              <Route path="/questions/:questionId" element={<QuestionDetailPage />} />
               <Route path="/verified-authors" element={<VerifiedAuthorsPage />} />
               <Route path="/search" element={<SearchPage />} />
               
@@ -107,8 +105,8 @@ const AppContent: React.FC = () => {
                 <Route path="/upload" element={<UploadPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/profile/:userId" element={<ProfilePage />} />
+                <Route path="/verified-author-progress" element={<VerifiedAuthorProgressPage />} />
                 <Route path="/admin" element={<AdminPage />} />
-                <Route path="/verified-author/request" element={<VerifiedAuthorRequestPage />} />
                 <Route path="/purchase-credits" element={<PurchaseCreditsPage />} />
                 <Route path="/payment-history" element={<PaymentHistoryPage />} />
               </Route>
