@@ -272,17 +272,20 @@ export interface DocumentUploadForm {
   tags?: string | string[];
 }
 
-// UPDATED: Added verifiedAuthor and year
+// UPDATED: Added verifiedAuthor, year, university, fileType, verifiedOnly
 export interface DocumentSearchParams {
   search?: string;
   category?: string;
   subject?: string;
+  university?: string; // NEW: For search API
   minRating?: number;
   maxCreditCost?: number;
-  verifiedAuthor?: boolean; // NEW
+  fileType?: string; // NEW: For search API (pdf, docx, pptx, etc.)
+  verifiedAuthor?: boolean; // For regular documents endpoint
+  verifiedOnly?: boolean; // NEW: For search API
   year?: number; // NEW
   authorId?: string; // NEW: To filter by specific author
-  sortBy?: 'newest' | 'oldest' | 'popular' | 'rating' | 'downloads';
+  sortBy?: 'newest' | 'oldest' | 'popular' | 'rating' | 'downloads' | 'relevance';
   sortOrder?: 'asc' | 'desc';
   page?: number;
   limit?: number;

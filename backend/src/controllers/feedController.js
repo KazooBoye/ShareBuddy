@@ -31,7 +31,8 @@ exports.getFollowingAuthorsDocs = async (req, res) => {
         d.average_rating as rating,
         d.created_at,
         u.full_name as author_name,
-        u.user_id as author_id
+        u.user_id as author_id,
+        u.is_verified_author
       FROM documents d
       JOIN users u ON d.author_id = u.user_id
       JOIN follows f ON f.following_id = u.user_id
@@ -78,7 +79,8 @@ exports.getTrendingDocs = async (req, res) => {
         d.average_rating as rating,
         d.created_at,
         u.full_name as author_name,
-        u.user_id as author_id
+        u.user_id as author_id,
+        u.is_verified_author
       FROM documents d
       JOIN users u ON d.author_id = u.user_id
       WHERE d.status = 'approved'
@@ -144,7 +146,8 @@ exports.getRecommendedDocs = async (req, res) => {
             d.average_rating as rating,
             d.created_at,
             u.full_name as author_name,
-            u.user_id as author_id
+            u.user_id as author_id,
+            u.is_verified_author
           FROM documents d
           JOIN users u ON d.author_id = u.user_id
           WHERE d.status = 'approved'
@@ -213,12 +216,13 @@ exports.getHotQA = async (req, res) => {
         q.created_at,
         u.full_name as author_name,
         u.user_id as author_id,
+        u.is_verified_author,
         COUNT(a.answer_id) as reply_count
       FROM questions q
       JOIN users u ON q.user_id = u.user_id
       LEFT JOIN answers a ON q.question_id = a.question_id
       WHERE q.created_at >= NOW() - INTERVAL '7 days'
-      GROUP BY q.question_id, q.title, q.content, q.created_at, u.full_name, u.user_id
+      GROUP BY q.question_id, q.title, q.content, q.created_at, u.full_name, u.user_id, u.is_verified_author
       HAVING COUNT(a.answer_id) > 0
       ORDER BY reply_count DESC, q.created_at DESC
       LIMIT $1

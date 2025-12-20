@@ -11,6 +11,7 @@ import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { toggleSidebar, toggleTheme } from '../../store/slices/uiSlice';
 import { useAuth } from '../../hooks/useAuth';
 import NotificationDropdown from '../notifications/NotificationDropdown';
+import VerifiedBadge from '../common/VerifiedBadge';
 
 const Navbar: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -71,6 +72,7 @@ const Navbar: React.FC = () => {
               id="user-dropdown-mobile"
               align="end"
             >
+              {user?.isVerifiedAuthor && <VerifiedBadge />}
             <NavDropdown.Item as={Link} to="/profile?tab=credits">
               <div className="d-flex align-items-center">
                 <FaCoins className="me-2 text-warning" />
@@ -157,6 +159,7 @@ const Navbar: React.FC = () => {
                       <span className="ms-2 text-light d-none d-lg-inline">
                         {user?.username}
                       </span>
+                      {user?.isVerifiedAuthor && <VerifiedBadge />}
                     </div>
                   }
                   id="user-dropdown"

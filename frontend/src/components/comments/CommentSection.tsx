@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { commentService } from '../../services/commentService';
 import { Comment, PaginatedResponse } from '../../types'; // Using your requested imports
 import { toast } from 'react-toastify';
+import VerifiedBadge from '../common/VerifiedBadge';
 
 interface CommentSectionProps {
   documentId: string;
@@ -173,7 +174,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ documentId }) => {
                   {comment.user.fullName || comment.user.username}
                 </h6>
                 {comment.user.isVerifiedAuthor && (
-                  <i className="bi bi-patch-check-fill text-primary small me-2" title="Verified Author" />
+                  <VerifiedBadge />
                 )}
                 <small className="text-muted">{formatDate(comment.createdAt)}</small>
               </div>

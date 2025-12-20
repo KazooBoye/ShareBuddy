@@ -37,7 +37,6 @@ import VerifiedAuthorsPage from './pages/VerifiedAuthorsPage';
 import VerifiedAuthorProgressPage from './pages/VerifiedAuthorProgressPage';
 import PurchaseCreditsPage from './pages/PurchaseCreditsPage';
 import PaymentHistoryPage from './pages/PaymentHistoryPage';
-import SearchPage from './pages/SearchPage';
 import BookmarkedDocumentsPage from './pages/BookmarkedDocumentsPage';
 
 // Styles
@@ -84,7 +83,6 @@ const AppContent: React.FC = () => {
               <Route path="/documents/:id" element={<DocumentDetailPage />} />
               <Route path="/bookmarked" element={<BookmarkedDocumentsPage />} />
               <Route path="/verified-authors" element={<VerifiedAuthorsPage />} />
-              <Route path="/search" element={<SearchPage />} />
               
               {/* Auth Routes */}
               <Route 

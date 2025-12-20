@@ -15,7 +15,7 @@ const getProfile = async (req, res, next) => {
     // Get basic user info
     const userResult = await query(
       `SELECT u.user_id, u.username, u.full_name, u.bio, u.university, u.major, 
-              u.credits, u.is_verified_author, u.avatar_url, u.created_at,
+              u.credits, u.is_verified_author, u.is_public_profile, u.avatar_url, u.created_at,
               COUNT(DISTINCT d.document_id) as document_count,
               COUNT(DISTINCT f1.following_id) as following_count,
               COUNT(DISTINCT f2.follower_id) as follower_count,
@@ -39,6 +39,14 @@ const getProfile = async (req, res, next) => {
 
     const user = userResult.rows[0];
 
+    // Check if profile is private
+    if (!user.is_public_profile && (!req.user || req.user.user_id !== id)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Profile is private'
+      });
+    }
+
     // Check if current user follows this user
     let isFollowing = false;
     if (req.user) {
@@ -60,6 +68,7 @@ const getProfile = async (req, res, next) => {
         major: user.major,
         credits: parseInt(user.credits) || 0,
         isVerifiedAuthor: user.is_verified_author,
+        isPublic: user.is_public_profile, 
         avatarUrl: user.avatar_url,
         createdAt: user.created_at,
         stats: {
@@ -173,6 +182,23 @@ const followUser = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'Không thể follow chính mình'
+      });
+    }
+
+    // Check if user allows following
+    const userCheck = await query(
+      'SELECT allow_follow_activity, username FROM users WHERE user_id = $1',
+      [id]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (!userCheck.rows[0].allow_follow_activity) {
+      return res.status(403).json({
+        success: false,
+        error: 'Người dùng này đã tắt chức năng theo dõi'
       });
     }
 
@@ -510,6 +536,274 @@ const changePassword = async (req, res, next) => {
   }
 };
 
+/**
+ * Update user settings (privacy & notifications)
+ */
+const updateUserSettings = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+    const {
+      email_notifications,
+      is_public_profile,
+      allow_follow_activity
+    } = req.body;
+
+    // Update settings
+    const result = await query(
+      `UPDATE users 
+       SET email_notifications = COALESCE($1, email_notifications),
+           is_public_profile = COALESCE($2, is_public_profile),
+           allow_follow_activity = COALESCE($3, allow_follow_activity),
+           updated_at = NOW()
+       WHERE user_id = $4
+       RETURNING user_id, email_notifications, is_public_profile, allow_follow_activity`,
+      [
+        email_notifications !== undefined ? email_notifications : null,
+        is_public_profile !== undefined ? is_public_profile : null,
+        allow_follow_activity !== undefined ? allow_follow_activity : null,
+        userId
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Cài đặt đã được cập nhật',
+      data: {
+        settings: result.rows[0]
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get user settings
+ */
+const getUserSettings = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+
+    const result = await query(
+      `SELECT 
+        email_notifications,
+        is_public_profile,
+        allow_follow_activity
+       FROM users
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    const settings = result.rows[0];
+
+    res.json({
+      success: true,
+      data: {
+        email_notifications: settings.email_notifications ?? true,
+        is_public_profile: settings.is_public_profile ?? true,
+        allow_follow_activity: settings.allow_follow_activity ?? true
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update email notification setting
+ */
+const updateEmailNotifications = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid data',
+        details: errors.array()
+      });
+    }
+
+    const userId = req.user.user_id;
+    const { enabled } = req.body;
+
+    await query(
+      'UPDATE users SET email_notifications = $1, updated_at = NOW() WHERE user_id = $2',
+      [enabled, userId]
+    );
+
+    res.json({
+      success: true,
+      message: enabled 
+        ? 'Đã bật thông báo email' 
+        : 'Đã tắt thông báo email',
+      data: {
+        email_notifications: enabled
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update profile visibility setting
+ */
+const updateProfileVisibility = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid data',
+        details: errors.array()
+      });
+    }
+
+    const userId = req.user.user_id;
+    const { isPublic } = req.body;
+
+    await query(
+      'UPDATE users SET is_public_profile = $1, updated_at = NOW() WHERE user_id = $2',
+      [isPublic, userId]
+    );
+
+    res.json({
+      success: true,
+      message: isPublic 
+        ? 'Profile của bạn đã được công khai' 
+        : 'Profile của bạn đã được ẩn',
+      data: {
+        profilePublic: isPublic
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update allow following setting
+ */
+const updateAllowFollowing = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid data',
+        details: errors.array()
+      });
+    }
+
+    const userId = req.user.user_id;
+    const { allowed } = req.body;
+
+    await query(
+      'UPDATE users SET allow_follow_activity = $1, updated_at = NOW() WHERE user_id = $2',
+      [allowed, userId]
+    );
+
+    res.json({
+      success: true,
+      message: allowed 
+        ? 'Người khác có thể theo dõi bạn' 
+        : 'Đã tắt chức năng theo dõi',
+      data: {
+        allowFollowing: allowed
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update all settings at once
+ */
+const updateAllSettings = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid data',
+        details: errors.array()
+      });
+    }
+
+    const userId = req.user.user_id;
+    const { email_notifications, is_public_profile, allow_follow_activity } = req.body;
+
+    // Build dynamic update query
+    const updates = [];
+    const values = [];
+    let paramCount = 0;
+
+    if (typeof email_notifications === 'boolean') {
+      paramCount++;
+      updates.push(`email_notifications = $${paramCount}`);
+      values.push(email_notifications);
+    }
+
+    if (typeof is_public_profile === 'boolean') {
+      paramCount++;
+      updates.push(`is_public_profile = $${paramCount}`);
+      values.push(is_public_profile);
+    }
+
+    if (typeof allow_follow_activity === 'boolean') {
+      paramCount++;
+      updates.push(`allow_follow_activity = $${paramCount}`);
+      values.push(allow_follow_activity);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No settings to update'
+      });
+    }
+
+    updates.push('updated_at = NOW()');
+    values.push(userId);
+
+    const updateQuery = `
+      UPDATE users 
+      SET ${updates.join(', ')}
+      WHERE user_id = $${paramCount + 1}
+      RETURNING email_notifications, is_public_profile, allow_follow_activity
+    `;
+
+    const result = await query(updateQuery, values);
+
+    res.json({
+      success: true,
+      message: 'Cập nhật cài đặt thành công',
+      data: {
+        email_notifications: result.rows[0].email_notifications,
+        is_public_profile: result.rows[0].is_public_profile,
+        allow_follow_activity: result.rows[0].allow_follow_activity
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getUserProfile: getProfile,
   getMyProfile: getProfile,
@@ -527,5 +821,11 @@ module.exports = {
   getMyCredits: getProfile, // Placeholder - need to implement
   getCreditHistory: getUserDocuments, // Placeholder - need to implement
   searchUsers: getFollowers, // Placeholder - need to implement
+  updateUserSettings,
+  getUserSettings,
+  updateEmailNotifications,
+  updateProfileVisibility,
+  updateAllowFollowing,
+  updateAllSettings,
   changePassword
 };

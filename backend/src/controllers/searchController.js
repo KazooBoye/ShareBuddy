@@ -38,7 +38,7 @@ const getSuggestions = async (req, res, next) => {
   try {
     const { q, limit } = req.query;
 
-    if (!q || q.trim().length < 2) {
+    if (!q || q.trim().length < 1) {
       return res.json({
         success: true,
         data: { suggestions: [] }

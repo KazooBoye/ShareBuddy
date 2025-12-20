@@ -62,7 +62,7 @@ const getQuestions = async (req, res, next) => {
             username: q.author_username,
             name: q.author_name,
             avatar: q.author_avatar,
-            isVerified: q.is_verified_author
+            isVerifiedAuthor: q.is_verified_author
           },
           createdAt: q.created_at,
           updatedAt: q.updated_at
@@ -147,7 +147,7 @@ const getQuestion = async (req, res, next) => {
             username: question.author_username,
             name: question.author_name,
             avatar: question.author_avatar,
-            isVerified: question.is_verified_author
+            isVerifiedAuthor: question.is_verified_author
           },
           createdAt: question.created_at,
           updatedAt: question.updated_at
@@ -161,7 +161,7 @@ const getQuestion = async (req, res, next) => {
             username: a.author_username,
             name: a.author_name,
             avatar: a.author_avatar,
-            isVerified: a.is_verified_author
+            isVerifiedAuthor: a.is_verified_author
           },
           createdAt: a.created_at,
           updatedAt: a.updated_at

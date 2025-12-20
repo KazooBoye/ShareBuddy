@@ -96,7 +96,7 @@ const DocumentList: React.FC<DocumentListProps> = ({
     }
   }, [dispatch, searchParams, documentsOverride, getFiltersFromUrl]);
 
-  // Debounced search effect - triggers 1.5s after user stops typing
+  // Debounced search effect - triggers 500ms after user stops typing
   useEffect(() => {
     const urlSearch = searchParams.get('search') || '';
     

@@ -13,6 +13,8 @@ import { toggleBookmark } from '../../store/slices/documentSlice';
 import { getCurrentUser } from '../../store/slices/authSlice';
 import { documentService } from '../../services/documentService';
 import { toast } from 'react-toastify';
+import { getImageUrl } from '../../utils/imageUtils';
+import VerifiedBadge from '../common/VerifiedBadge';
 
 interface DocumentCardProps {
   document: Document;
@@ -38,31 +40,6 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
   const [isDownloading, setIsDownloading] = useState(false);
   const [showUnbookmarkModal, setShowUnbookmarkModal] = useState(false);
   const [imageError, setImageError] = useState(false);
-
-  // --- HELPER TO FIX IMAGE URL ---
-  const getImageUrl = (url?: string | null): string | null => {
-    if (!url) return null;
-    if (url.startsWith('http')) return url;
-
-    // Get Base URL
-    let baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-    
-    // Remove '/api' suffix if present
-    baseUrl = baseUrl.replace(/\/api\/?$/, '');
-    baseUrl = baseUrl.replace(/\/$/, '');
-
-    // Clean Image Path (Handle Windows backslashes)
-    let imagePath = url.replace(/\\/g, '/');
-    
-    // Ensure leading slash
-    if (!imagePath.startsWith('/')) {
-      imagePath = `/${imagePath}`;
-    }
-
-    const finalUrl = `${baseUrl}${imagePath}`;
-    console.log('Thumbnail URL:', finalUrl); // Debug log
-    return finalUrl;
-  };
 
   const handleBookmark = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -310,7 +287,7 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
                   {doc.author.fullName || doc.author.username}
                 </small>
                 {doc.author.isVerifiedAuthor && (
-                  <i className="bi bi-patch-check-fill text-primary ms-1 flex-shrink-0" />
+                  <VerifiedBadge />
                 )}
               </div>
             </div>
