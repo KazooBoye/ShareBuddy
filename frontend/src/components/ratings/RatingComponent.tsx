@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { ratingService } from '../../services/ratingService';
 import { Rating, RatingStatistics } from '../../types';
 import { toast } from 'react-toastify';
+import VerifiedBadge from '../common/VerifiedBadge';
 
 interface RatingComponentProps {
   documentId: string;
@@ -162,7 +163,7 @@ const RatingComponent: React.FC<RatingComponentProps> = ({ documentId }) => {
                     onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/40?text=U'; }}
                   />
                   <div className="flex-grow-1">
-                    <h6 className="mb-0 fw-bold">{rating.user.fullName || rating.user.username}</h6>
+                    <h6 className="mb-0 fw-bold">{rating.user.fullName || rating.user.username} {rating.user.isVerifiedAuthor && <VerifiedBadge />}</h6>
                     <div className="d-flex align-items-center mt-1">
                       {renderStars(rating.rating)}
                       <span className="text-muted ms-2 small">• {new Date(rating.createdAt).toLocaleDateString('vi-VN')}</span>

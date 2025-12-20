@@ -86,7 +86,9 @@ const getCollaborativeRecommendations = async (userId, limit = 10) => {
            WHERE user_id = $2 AND interaction_type IN ('download', 'view', 'bookmark')
          )
          AND d.status = 'approved'
-       GROUP BY d.document_id, u.user_id
+       GROUP BY d.document_id, d.title, d.description, d.university, d.subject, 
+                d.average_rating, d.download_count, d.view_count, d.thumbnail_url, 
+                d.created_at, u.user_id, u.username, u.full_name, u.avatar_url, u.is_verified_author
        ORDER BY liked_by_similar_users DESC, avg_rating_by_similar DESC NULLS LAST
        LIMIT $3`,
       [similarUserIds, userId, limit]

@@ -13,46 +13,135 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
     const conditions = [];
     let paramCount = 0;
 
-    // Base query with full-text search
-    // Note: paramCount starts at 0, incremented before use
-    let sqlQuery = `
-      SELECT 
-        d.document_id,
-        d.title,
-        d.description,
-        d.university,
-        d.subject,
-        d.file_type,
-        d.credit_cost,
-        d.download_count,
-        d.view_count,
-        d.average_rating,
-        d.rating_count,
-        d.thumbnail_url,
-        d.created_at,
-        u.user_id,
-        u.username,
-        u.full_name,
-        u.is_verified_author,
-        ts_rank(d.search_vector, query) as relevance
-      FROM documents d
-      JOIN users u ON d.author_id = u.user_id,
-      to_tsquery('simple', $${++paramCount}) query
-      WHERE d.status = 'approved'
-    `;
+    // Process search query
+    const trimmedQuery = searchQuery.trim();
+    const isShortQuery = trimmedQuery.length < 3;
+    
+    let processedQuery = '';
+    let useILike = false;
+    let usePrefixMatch = false;
+    
+    if (isShortQuery) {
+      // For short queries (< 3 chars), use ILIKE for partial matching
+      useILike = true;
+      processedQuery = trimmedQuery;
+    } else {
+      // For longer queries, use full-text search with tsquery
+      // Check if it's a single word (no spaces) - use prefix matching for partial word matches
+      const words = trimmedQuery.split(/\s+/).filter(w => w.length > 0);
+      
+      if (words.length === 1) {
+        // Single word query - use prefix matching (:* operator) to match partial words
+        // Example: "lap" will match "laptop", "laptrinhmang", etc.
+        usePrefixMatch = true;
+        const cleanWord = words[0].replace(/[^\w]/g, '');
+        processedQuery = cleanWord + ':*'; // Prefix match operator
+      } else {
+        // Multiple words - use standard tsquery with OR operator
+        processedQuery = words
+          .map(term => term.replace(/[^\w\s]/g, ''))
+          .filter(term => term.length > 0)
+          .join(' | '); // OR operator for better results
+      }
+    }
 
-    // Process search query (convert to tsquery format)
-    const processedQuery = searchQuery
-      .trim()
-      .split(/\s+/)
-      .map(term => term.replace(/[^\w\s]/g, ''))
-      .filter(term => term.length > 0)
-      .join(' | '); // OR operator for better results
-
-    queryParams.push(processedQuery || '*'); // Fallback to match all
-
-    // Add full-text search condition
-    conditions.push(`d.search_vector @@ query`);
+    // Build base query based on search type
+    let sqlQuery;
+    if (useILike) {
+      // Use ILIKE query for short queries
+      sqlQuery = `
+        SELECT 
+          d.document_id,
+          d.title,
+          d.description,
+          d.university,
+          d.subject,
+          d.file_type,
+          d.credit_cost,
+          d.download_count,
+          d.view_count,
+          d.average_rating,
+          d.rating_count,
+          d.thumbnail_url,
+          d.created_at,
+          u.user_id,
+          u.username,
+          u.full_name,
+          u.is_verified_author,
+          1.0 as relevance
+        FROM documents d
+        JOIN users u ON d.author_id = u.user_id
+        WHERE d.status = 'approved'
+      `;
+      
+      // Add ILIKE search condition
+      if (processedQuery && processedQuery.length > 0) {
+        conditions.push(`(
+          d.title ILIKE $${++paramCount} OR 
+          d.description ILIKE $${++paramCount} OR 
+          d.subject ILIKE $${++paramCount}
+        )`);
+        const likePattern = `%${processedQuery}%`;
+        queryParams.push(likePattern, likePattern, likePattern);
+      }
+    } else {
+      // Use full-text search for longer queries
+      if (processedQuery && processedQuery.length > 0) {
+        queryParams.push(processedQuery);
+        sqlQuery = `
+          SELECT 
+            d.document_id,
+            d.title,
+            d.description,
+            d.university,
+            d.subject,
+            d.file_type,
+            d.credit_cost,
+            d.download_count,
+            d.view_count,
+            d.average_rating,
+            d.rating_count,
+            d.thumbnail_url,
+            d.created_at,
+            u.user_id,
+            u.username,
+            u.full_name,
+            u.is_verified_author,
+            ts_rank(d.search_vector, query) as relevance
+          FROM documents d
+          JOIN users u ON d.author_id = u.user_id,
+          to_tsquery('simple', $${++paramCount}) query
+          WHERE d.status = 'approved'
+        `;
+        conditions.push(`d.search_vector @@ query`);
+      } else {
+        // No search query, just list all
+        sqlQuery = `
+          SELECT 
+            d.document_id,
+            d.title,
+            d.description,
+            d.university,
+            d.subject,
+            d.file_type,
+            d.credit_cost,
+            d.download_count,
+            d.view_count,
+            d.average_rating,
+            d.rating_count,
+            d.thumbnail_url,
+            d.created_at,
+            u.user_id,
+            u.username,
+            u.full_name,
+            u.is_verified_author,
+            1.0 as relevance
+          FROM documents d
+          JOIN users u ON d.author_id = u.user_id
+          WHERE d.status = 'approved'
+        `;
+      }
+    }
 
     // --- APPLY FILTERS ---
 
@@ -71,9 +160,9 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
       queryParams.push(filters.minRating);
     }
 
-    if (filters.maxCost !== undefined) {
+    if (filters.maxCost !== undefined && filters.maxCost !== null && filters.maxCost !== '') {
       conditions.push(`d.credit_cost <= $${++paramCount}`);
-      queryParams.push(filters.maxCost);
+      queryParams.push(parseInt(filters.maxCost));
     }
 
     if (filters.fileType) {
@@ -83,6 +172,12 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
 
     if (filters.verifiedOnly === 'true' || filters.verifiedOnly === true) {
       conditions.push('u.is_verified_author = TRUE');
+    }
+
+    // Year filter - filter by upload year
+    if (filters.year) {
+      conditions.push(`EXTRACT(YEAR FROM d.created_at) = $${++paramCount}`);
+      queryParams.push(parseInt(filters.year));
     }
 
     // 🟢 ADDED: TAGS FILTER LOGIC
@@ -158,16 +253,47 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
     
     // We can't reuse queryParams easily because limit/offset were added. 
     // We need to rebuild the count params.
-    const countParams = [processedQuery || '*'];
-    let countParamIndex = 1;
-
-    let countQuery = `
-      SELECT COUNT(*) 
-      FROM documents d
-      JOIN users u ON d.author_id = u.user_id,
-      to_tsquery('simple', $1) query
-      WHERE d.status = 'approved' AND d.search_vector @@ query
-    `;
+    const countParams = [];
+    let countParamIndex = 0;
+    
+    // Build count query - match the main query structure
+    let countQuery;
+    if (useILike && processedQuery && processedQuery.length > 0) {
+      // Use ILIKE for count query
+      const likePattern = `%${processedQuery}%`;
+      countParams.push(likePattern, likePattern, likePattern);
+      countParamIndex = 3;
+      countQuery = `
+        SELECT COUNT(*) 
+        FROM documents d
+        JOIN users u ON d.author_id = u.user_id
+        WHERE d.status = 'approved' AND (
+          d.title ILIKE $1 OR 
+          d.description ILIKE $2 OR 
+          d.subject ILIKE $3
+        )
+      `;
+    } else if (!useILike && processedQuery && processedQuery.length > 0) {
+      // Use full-text search for count query (with prefix matching if applicable)
+      countParams.push(processedQuery);
+      countQuery = `
+        SELECT COUNT(*) 
+        FROM documents d
+        JOIN users u ON d.author_id = u.user_id,
+        to_tsquery('simple', $1) query
+        WHERE d.status = 'approved' AND d.search_vector @@ query
+      `;
+      countParamIndex = 1;
+    } else {
+      // No search, just count all
+      countQuery = `
+        SELECT COUNT(*) 
+        FROM documents d
+        JOIN users u ON d.author_id = u.user_id
+        WHERE d.status = 'approved'
+      `;
+      countParamIndex = 0;
+    }
 
     // Add same filters to count query
     if (filters.subject) {
@@ -182,9 +308,9 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
       countQuery += ` AND d.average_rating >= $${++countParamIndex}`;
       countParams.push(filters.minRating);
     }
-    if (filters.maxCost !== undefined) {
+    if (filters.maxCost !== undefined && filters.maxCost !== null && filters.maxCost !== '') {
       countQuery += ` AND d.credit_cost <= $${++countParamIndex}`;
-      countParams.push(filters.maxCost);
+      countParams.push(parseInt(filters.maxCost));
     }
     if (filters.fileType) {
       countQuery += ` AND d.file_type = $${++countParamIndex}`;
@@ -192,6 +318,10 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
     }
     if (filters.verifiedOnly === 'true' || filters.verifiedOnly === true) {
       countQuery += ' AND u.is_verified_author = TRUE';
+    }
+    if (filters.year) {
+      countQuery += ` AND EXTRACT(YEAR FROM d.created_at) = $${++countParamIndex}`;
+      countParams.push(parseInt(filters.year));
     }
 
     // 🟢 ADDED: TAGS FILTER LOGIC FOR COUNT
@@ -223,11 +353,26 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
     const countResult = await query(countQuery, countParams);
     const total = parseInt(countResult.rows[0].count);
 
+    // Map response fields to match frontend expectations
+    const mappedDocuments = result.rows.map(doc => ({
+      ...doc,
+      author_username: doc.username,
+      is_author_verified: doc.is_verified_author,
+      // Keep original fields for backward compatibility
+      username: doc.username,
+      is_verified_author: doc.is_verified_author
+    }));
+
     return {
-      documents: result.rows,
+      documents: mappedDocuments,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      },
+      // Keep backward compatibility
       total,
-      page,
-      limit,
       totalPages: Math.ceil(total / limit)
     };
   } catch (error) {
@@ -249,7 +394,8 @@ const getSearchSuggestions = async (searchQuery, limit = 10) => {
       [`%${searchQuery}%`, limit]
     );
 
-    return result.rows;
+    // Return array of title strings for autocomplete (frontend expects strings)
+    return result.rows.map(row => row.title);
   } catch (error) {
     throw error;
   }

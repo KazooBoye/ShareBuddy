@@ -15,12 +15,77 @@ import {
 
 export const documentService = {
   // Get all documents with pagination and filters
+  // Uses full-text search API when search query is provided
   getDocuments: async (params?: DocumentSearchParams): Promise<ApiResponse<PaginatedResponse<Document>>> => {
+    // If search query exists, use full-text search API
+    if (params?.search && params.search.trim().length > 0) {
+      const queryParams = new URLSearchParams();
+      queryParams.append('q', params.search.trim());
+      
+      // Add pagination
+      if (params.page) queryParams.append('page', params.page.toString());
+      if (params.limit) queryParams.append('limit', params.limit.toString());
+      
+      // Add filters that match search API
+      if (params.subject) queryParams.append('subject', params.subject);
+      if (params.university) queryParams.append('university', params.university);
+      if (params.minRating) queryParams.append('minRating', params.minRating.toString());
+      if (params.maxCreditCost) queryParams.append('maxCost', params.maxCreditCost.toString());
+      if (params.fileType) queryParams.append('fileType', params.fileType);
+      if (params.verifiedOnly) queryParams.append('verifiedOnly', 'true');
+      if (params.year) queryParams.append('year', params.year.toString());
+      if (params.tags && Array.isArray(params.tags) && params.tags.length > 0) {
+        params.tags.forEach(tag => queryParams.append('tags', tag));
+      }
+      
+      // Map sortBy to search API format
+      if (params.sortBy) {
+        const sortMap: Record<string, string> = {
+          'newest': 'newest',
+          'oldest': 'newest', // Search API doesn't have oldest, use newest
+          'popular': 'popular',
+          'rating': 'rating',
+          'downloads': 'popular', // Map to popular
+          'relevance': 'relevance'
+        };
+        queryParams.append('sortBy', sortMap[params.sortBy] || 'relevance');
+      }
+      
+      const response = await apiRequest('GET', `search/documents?${queryParams.toString()}`);
+      
+      // Map search API response to expected format
+      if (response.data && response.data.documents) {
+        return {
+          ...response,
+          data: {
+            items: response.data.documents.map((doc: any) => ({
+              ...doc,
+              id: doc.document_id,
+              author: {
+                id: doc.user_id,
+                username: doc.author_username || doc.username,
+                fullName: doc.full_name,
+                avatarUrl: doc.avatar_url,
+                isVerifiedAuthor: doc.is_author_verified || doc.is_verified_author
+              }
+            })),
+            page: response.data.pagination?.page || response.data.page || 1,
+            totalPages: response.data.pagination?.totalPages || response.data.totalPages || 1,
+            totalItems: response.data.pagination?.total || response.data.total || 0,
+            hasNext: (response.data.pagination?.page || response.data.page || 1) < (response.data.pagination?.totalPages || response.data.totalPages || 1),
+            hasPrev: (response.data.pagination?.page || response.data.page || 1) > 1
+          }
+        };
+      }
+      return response;
+    }
+    
+    // Regular documents endpoint for non-search queries
     const queryParams = new URLSearchParams();
     
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
+        if (value !== undefined && value !== null && value !== '' && key !== 'search') {
           // Handle array values (like tags)
           if (Array.isArray(value)) {
             value.forEach(v => queryParams.append(key, v.toString()));
@@ -119,7 +184,7 @@ export const documentService = {
     return apiRequest('GET', 'documents/downloads');
   },
 
-  // Search documents
+  // Search documents (alias for getDocuments with search param)
   searchDocuments: async (
     query: string, 
     filters?: Partial<DocumentSearchParams>
@@ -130,6 +195,11 @@ export const documentService = {
     };
     
     return documentService.getDocuments(params);
+  },
+
+  // Get search suggestions (autocomplete)
+  getSearchSuggestions: async (query: string, limit: number = 10): Promise<ApiResponse<{ suggestions: string[] }>> => {
+    return apiRequest('GET', `search/suggestions?q=${encodeURIComponent(query)}&limit=${limit}`);
   },
 
   // Get popular documents

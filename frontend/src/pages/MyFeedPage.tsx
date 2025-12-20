@@ -12,6 +12,8 @@ import { Container, Row, Col, Card, Spinner, Alert } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import apiClient from '../services/api';
 import QuestionDetailModal from '../components/questions/QuestionDetailModal';
+import { getImageUrl } from '../utils/imageUtils';
+import VerifiedBadge from '../components/common/VerifiedBadge';
 
 interface Document {
   document_id: string;
@@ -21,6 +23,7 @@ interface Document {
   download_count: number;
   rating: number | string;
   author_name: string;
+  is_verified_author: boolean;
   created_at: string;
 }
 
@@ -29,6 +32,7 @@ interface QAItem {
   title: string;
   reply_count: number;
   author_name: string;
+  is_verified_author: boolean;
   created_at: string;
 }
 
@@ -136,11 +140,11 @@ const MyFeedPage: React.FC = () => {
                     className="card-hover"
                     onClick={() => navigate(`/documents/${doc.document_id}`)}
                   >
-                    <Card.Img variant="top" src={doc.thumbnail_url || '/placeholder.png'} style={{ height: '160px', objectFit: 'cover' }} />
+                    <Card.Img variant="top" src={getImageUrl(doc.thumbnail_url) || '/placeholder.png'} style={{ height: '160px', objectFit: 'cover' }} />
                     <Card.Body>
                       <Card.Title className="text-truncate" style={{ fontSize: '1rem' }}>{doc.title}</Card.Title>
                       <Card.Text className="text-muted small mb-0">
-                        <i className="bi bi-person me-1"></i> {doc.author_name}
+                        <i className="bi bi-person me-1"></i> {doc.author_name} {doc.is_verified_author && <VerifiedBadge />}
                       </Card.Text>
                     </Card.Body>
                   </Card>
@@ -180,7 +184,7 @@ const MyFeedPage: React.FC = () => {
                           <i className="bi bi-star-fill text-warning me-1"></i> {Number(doc.rating || 0).toFixed(1)}
                         </Card.Text>
                         <Card.Text className="text-muted small">
-                          <i className="bi bi-person me-1"></i> {doc.author_name}
+                          <i className="bi bi-person me-1"></i> {doc.author_name} {doc.is_verified_author && <VerifiedBadge />}
                         </Card.Text>
                       </div>
                     </Card.Body>
@@ -215,11 +219,11 @@ const MyFeedPage: React.FC = () => {
                     style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/documents/${doc.document_id}`)}
                 >
-                    <Card.Img variant="top" src={doc.thumbnail_url || '/placeholder.png'} style={{ height: '140px', objectFit: 'cover' }} />
+                    <Card.Img variant="top" src={getImageUrl(doc.thumbnail_url) || '/placeholder.png'} style={{ height: '140px', objectFit: 'cover' }} />
                     <Card.Body>
                         <Card.Title className="text-truncate" style={{ fontSize: '0.95rem' }}>{doc.title}</Card.Title>
                         <Card.Text className="text-muted small">
-                            <i className="bi bi-person me-1"></i> {doc.author_name}
+                            <i className="bi bi-person me-1"></i> {doc.author_name} {doc.is_verified_author && <VerifiedBadge />}
                         </Card.Text>
                     </Card.Body>
                 </Card>
@@ -259,7 +263,7 @@ const MyFeedPage: React.FC = () => {
                         <div className="flex-grow-1">
                           <Card.Title style={{ fontSize: '1rem' }}>{qa.title}</Card.Title>
                           <Card.Text className="text-muted small mb-0">
-                            <i className="bi bi-person me-1"></i> {qa.author_name}
+                            <i className="bi bi-person me-1"></i> {qa.author_name} {qa.is_verified_author && <VerifiedBadge />}
                             <span className="mx-2">•</span>
                             <i className="bi bi-chat-dots me-1"></i> {qa.reply_count} câu trả lời
                           </Card.Text>

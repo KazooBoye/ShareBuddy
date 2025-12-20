@@ -2,6 +2,26 @@
 
 All notable changes to ShareBuddy project will be documented in this file.
 
+## [1.6.4] - 2025-12-20
+
+### 🎯 VerifiedAuthor, Settings Configure, Search-Vector, Thumbnails Modification
+
+### Settings Configured
+- 3 settings from settings tab logic has been implemented (email_noti not tested)
+- Adding new fields to users table (email_notifications, is_public_profile, allow_follow_activity)
+- **Reference**: migration_005_add_user_settings.sql
+- Fixing minor bugs related
+
+### VerifiedAuthor
+- Added '\frontend\src\components\common\VerifiedBadge.tsx' to store the badge icon
+- Apply to all pages that has user is verified
+
+### Thumbnails on new functions
+- Refactor getImageUrl function from previewService.ts to '\frontend\src\utils\imageUtils.ts'
+
+### Search-Vector implement
+- Implement Search-Vector for seperate queries with ( _ ) character and words > 5
+
 
 ## [1.6.3] - 2025-12-20
 

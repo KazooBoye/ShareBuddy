@@ -2,7 +2,7 @@
  * User Profile Page for ShareBuddy - Complete profile management with social features
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { Container, Row, Col, Card, Button, Form, Tab, Tabs, Badge, Alert, Image, Modal, Spinner, Table, ProgressBar } from 'react-bootstrap';
 import { 
   FaEdit, FaSave, FaTimes, FaCamera, FaUniversity, FaGraduationCap, 
@@ -13,7 +13,10 @@ import { useAuth } from '../../hooks/useAuth';
 import { userService } from '../../services/userService';
 import { creditService } from '../../services/creditService';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import ModerationStatusBadge from '../../components/ModerationStatusBadge';
+import apiClient from '../../services/api';
+import VerifiedBadge from '../../components/common/VerifiedBadge';
 
 interface UserProfile {
   id: string;
@@ -51,6 +54,12 @@ interface UserDocument {
   status?: string;
 }
 
+interface UserSettings {
+  email_notifications: boolean;
+  is_public_profile: boolean;
+  allow_follow_activity: boolean;
+}
+
 const ProfilePage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
@@ -62,6 +71,8 @@ const ProfilePage: React.FC = () => {
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [updating, setUpdating] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -75,6 +86,11 @@ const ProfilePage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [creditHistory, setCreditHistory] = useState<any[]>([]);
   const [creditsLoading, setCreditsLoading] = useState(false);
+  const [settings, setSettings] = useState<UserSettings>({
+    email_notifications: true,
+    is_public_profile: true,
+    allow_follow_activity: true
+  });
 
   // Check if viewing own profile
   const isOwnProfile = currentUser?.id === profile?.id;
@@ -221,6 +237,38 @@ const ProfilePage: React.FC = () => {
 
     loadCreditHistory();
   }, [activeTab, isOwnProfile]);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await userService.getUserSettings();
+      if (response.success && response.data) {
+        setSettings({
+        email_notifications: response.data.email_notifications 
+          ?? response.data.emailNotifications 
+          ?? true,
+
+        is_public_profile: response.data.is_public_profile 
+          ?? response.data.profilePublic 
+          ?? true,
+
+        allow_follow_activity: response.data.allow_follow_activity 
+          ?? response.data.allowFollowing 
+          ?? true
+        });
+      }
+    } catch (error: any) {
+      console.error('Failed to load settings:', error);
+      setError('Không thể tải cài đặt');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+  if (isOwnProfile) {
+    fetchSettings();
+  }
+}, [isOwnProfile]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -392,6 +440,86 @@ const ProfilePage: React.FC = () => {
       </Container>
     );
   }
+  // Profile Settings
+
+  const handleToggle = async (settingKey: keyof UserSettings, value: boolean) => {
+    setUpdating(settingKey);
+    
+    try {
+      let endpoint = '';
+      let payload = {};
+
+      switch (settingKey) {
+        case 'email_notifications':
+          endpoint = '/settings/email-notifications';
+          payload = { enabled: value };
+          break;
+        case 'is_public_profile':
+          endpoint = '/settings/profile-visibility';
+          payload = { isPublic: value };
+          break;
+        case 'allow_follow_activity':
+          endpoint = '/settings/allow-following';
+          payload = { allowed: value };
+          break;
+      }
+
+      const response = await apiClient.patch(endpoint, payload);
+
+      if (response.data.success) {
+        setSettings(prev => ({ ...prev, [settingKey]: value }));
+        toast.success(response.data.message || 'Cập nhật thành công');
+      }
+    } catch (error: any) {
+      console.error('Failed to update setting:', error);
+      toast.error(error.response?.data?.error || 'Có lỗi xảy ra');
+      // Revert the toggle on error
+      fetchSettings();
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-5">
+        <Spinner animation="border" variant="primary" />
+        <p className="mt-3 text-muted">Đang tải cài đặt...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="danger" className="m-3">
+        <Alert.Heading>Lỗi</Alert.Heading>
+        <p>{error}</p>
+      </Alert>
+    );
+  }
+
+  const handleSaveSettings = async () => {
+    setSaving(true);
+    try {
+      const response = await userService.updateUserSettings(settings);
+      if (response.success) {
+        toast.success('Cài đặt đã được lưu');
+      }
+    } catch (error: any) {
+      console.error('Failed to save settings:', error);
+      toast.error(error.response?.data?.error || 'Không thể lưu cài đặt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Container className="py-5 text-center">
+        <Spinner animation="border" variant="primary" />
+      </Container>
+    );
+  }
 
   return (
     <Container className="py-4" style={{ marginTop: '80px' }}>
@@ -449,13 +577,10 @@ const ProfilePage: React.FC = () => {
             <Col md={6}>
               <div style={{ marginTop: '20px' }}>
                 <div className="d-flex align-items-center mb-2">
-                  <h3 className="mb-0 me-2">{profile.fullName}</h3>
-                  {profile.isVerifiedAuthor && (
-                    <Badge bg="primary" className="d-flex align-items-center">
-                      <FaStar className="me-1" size={12} />
-                      Tác giả uy tín
-                    </Badge>
-                  )}
+                  <h3 
+                    className="mb-0 me-2">{profile.fullName}
+                    {profile.isVerifiedAuthor && <VerifiedBadge />}
+                  </h3>
                 </div>
                 <p className="text-muted mb-2">@{profile.username}</p>
 
@@ -939,29 +1064,65 @@ const ProfilePage: React.FC = () => {
                 <h6 className="mb-0">Cài đặt tài khoản</h6>
               </Card.Header>
               <Card.Body>
-                <div className="d-flex justify-content-between align-items-center py-2 border-bottom">
-                  <div>
-                    <strong>Thông báo email</strong>
-                    <p className="mb-0 text-muted small">Nhận thông báo qua email</p>
+                <Form.Group className="mb-3">
+                  <div className="d-flex justify-content-between align-items-center py-2 border-bottom">
+                    <div>
+                      <Form.Label className="mb-1 fw-bold">Thông báo email</Form.Label>
+                      <p className="mb-0 text-muted small">Nhận thông báo qua email</p>
+                    </div>
+                    <Form.Check
+                      type="switch"
+                      id="email-notifications"
+                      checked={settings.email_notifications}
+                      onChange={(e) => handleToggle('email_notifications', e.target.checked)}
+                      style={{ transform: 'scale(1.3)' }}
+                    />
                   </div>
-                  <Form.Check type="switch" defaultChecked />
-                </div>
+                </Form.Group>
+                  {settings.email_notifications && (
+                    <Alert variant="info" className="small mb-0">
+                      <i className="bi bi-info-circle me-2"></i>
+                      Bạn sẽ nhận email về: tài liệu mới, bình luận, lượt theo dõi, và thông báo quan trọng
+                    </Alert>
+                  )}
                 
-                <div className="d-flex justify-content-between align-items-center py-2 border-bottom">
-                  <div>
-                    <strong>Hiển thị profile công khai</strong>
-                    <p className="mb-0 text-muted small">Cho phép người khác xem profile của bạn</p>
+                <Form.Group className="mb-3">
+                  <div className="d-flex justify-content-between align-items-center py-2 border-bottom">
+                    <div>
+                      <Form.Label className="mb-1 fw-bold">Hiển thị profile công khai</Form.Label>
+                      <p className="mb-0 text-muted small">Cho phép người khác xem profile của bạn</p>
+                    </div>
+                    <Form.Check
+                      type="switch"
+                      id="public-profile"
+                      checked={settings.is_public_profile}
+                      onChange={(e) => handleToggle('is_public_profile', e.target.checked)}
+                      style={{ transform: 'scale(1.3)' }}
+                    />
                   </div>
-                  <Form.Check type="switch" defaultChecked />
-                </div>
-                
-                <div className="d-flex justify-content-between align-items-center py-2">
-                  <div>
-                    <strong>Cho phép theo dõi</strong>
-                    <p className="mb-0 text-muted small">Người khác có thể theo dõi hoạt động của bạn</p>
+                </Form.Group>
+                {!settings.is_public_profile && (
+                  <Alert variant="warning" className="small mt-3 mb-0">
+                    <i className="bi bi-exclamation-triangle me-2"></i>
+                    Profile riêng tư: Chỉ bạn mới có thể xem thông tin cá nhân
+                  </Alert>
+                )}
+
+                <Form.Group className="mb-0">
+                  <div className="d-flex justify-content-between align-items-center py-2">
+                    <div>
+                      <Form.Label className="mb-1 fw-bold">Cho phép theo dõi hoạt động</Form.Label>
+                      <p className="mb-0 text-muted small">Người khác có thể theo dõi hoạt động của bạn</p>
+                    </div>
+                    <Form.Check
+                      type="switch"
+                      id="follow-activity"
+                      checked={settings.allow_follow_activity}
+                      onChange={(e) => handleToggle('allow_follow_activity', e.target.checked)}
+                      style={{ transform: 'scale(1.3)' }}
+                    />
                   </div>
-                  <Form.Check type="switch" defaultChecked />
-                </div>
+                </Form.Group>
               </Card.Body>
             </Card>
           </Tab>

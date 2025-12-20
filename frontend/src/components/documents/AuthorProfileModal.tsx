@@ -11,6 +11,7 @@ import { documentService } from '../../services/documentService';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-toastify';
 import DocumentCard from './DocumentCard';
+import VerifiedBadge from '../common/VerifiedBadge';
 
 interface AuthorProfileModalProps {
   show: boolean;
@@ -206,9 +207,7 @@ const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({ show, onHide, a
               <h4 className="mb-1">
                 {profile.fullName}
                 {profile.isVerifiedAuthor && (
-                  <Badge bg="primary" className="ms-2">
-                    <i className="bi bi-patch-check-fill" /> Verified
-                  </Badge>
+                  <VerifiedBadge />
                 )}
               </h4>
               <p className="text-muted mb-2">@{profile.username}</p>

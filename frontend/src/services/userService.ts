@@ -5,7 +5,14 @@
 import { apiRequest, uploadFile } from './api';
 import { ApiResponse, User, PaginatedResponse } from '../types';
 
+export interface UserSettings {
+  emailNotifications: boolean;
+  profilePublic: boolean;
+  allowFollowing: boolean;
+}
+
 export const userService = {
+
   // Get user profile by ID
   getUserProfile: async (userId: string): Promise<ApiResponse<User>> => {
     return apiRequest('GET', `users/profile/${userId}`);
@@ -199,5 +206,39 @@ export const userService = {
   getTopContributors: async (limit?: number): Promise<ApiResponse<User[]>> => {
     const params = limit ? `?limit=${limit}` : '';
     return apiRequest('GET', `users/top-contributors${params}`);
+  },
+
+  // Get user settings
+  getUserSettings: async () => {
+    return apiRequest('GET', 'users/settings');
+  },
+
+  // Update user settings
+  updateUserSettings: async (settings: {
+    email_notifications?: boolean;
+    is_public_profile?: boolean;
+    allow_follow_activity?: boolean;
+  }) => {
+    return apiRequest('PUT', 'users/settings', settings);
+  },
+  
+  // Update email notifications
+  updateEmailNotifications: async (enabled: boolean) => {
+    return apiRequest('PATCH', '/settings/email-notifications', { enabled });
+  },
+
+  // Update profile visibility
+  updateProfileVisibility: async (isPublic: boolean) => {
+    return apiRequest('PATCH', '/settings/profile-visibility', { isPublic });
+  },
+
+  // Update allow following
+  updateAllowFollowing: async (allowed: boolean) => {
+    return apiRequest('PATCH', '/settings/allow-following', { allowed });
+  },
+
+  // Update all settings at once
+  updateAllSettings: async (settings: Partial<UserSettings>) => {
+    return apiRequest('PUT', '/settings', settings);
   }
 };

@@ -11,6 +11,7 @@ import { questionService } from '../../services/questionService';
 import { toast } from 'react-toastify';
 import { useAppDispatch } from '../../store/hooks';
 import { getCurrentUser } from '../../store/slices/authSlice';
+import VerifiedBadge from '../common/VerifiedBadge';
 
 interface QuestionDetailModalProps {
   show: boolean;
@@ -231,7 +232,7 @@ const QuestionDetailModal: React.FC<QuestionDetailModalProps> = ({ show, onHide,
                     <div className="d-flex justify-content-between align-items-center text-muted small mt-3 border-top pt-2">
                       <div>
                         Hỏi bởi <strong>{question.author.name}</strong>
-                        {question.author.isVerified && <Badge bg="primary" className="ms-1">✓</Badge>}
+                        {question.author.isVerified && <VerifiedBadge />}
                       </div>
                       <span>{new Date(question.createdAt).toLocaleString('vi-VN')}</span>
                     </div>
@@ -291,7 +292,7 @@ const QuestionDetailModal: React.FC<QuestionDetailModalProps> = ({ show, onHide,
                         <div className="d-flex justify-content-between align-items-center text-muted small">
                           <div>
                             Trả lời bởi <strong>{answer.author.name}</strong>
-                            {answer.author.isVerified && <Badge bg="primary" className="ms-1">✓</Badge>}
+                            {answer.author.isVerified && <VerifiedBadge />}
                           </div>
                           <span>{new Date(answer.createdAt).toLocaleString('vi-VN')}</span>
                         </div>

@@ -107,6 +107,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // API Routes - Enable routes for testing
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/settings', userRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/preview', previewRoutes);
