@@ -8,6 +8,7 @@
  */
 
 const { pool } = require('../config/database');
+const recommendationService = require('../services/recommendationService');
 
 /**
  * Get documents from authors the user is following
@@ -110,46 +111,81 @@ exports.getRecommendedDocs = async (req, res) => {
   try {
     const userId = req.user.user_id;
     const limit = parseInt(req.query.limit) || 20;
+    let recommendations = [];
+    let source = 'none';
 
-    // Simplified recommendation: get popular documents from same subjects as user's downloads
-    const query = `
-      WITH user_subjects AS (
-        SELECT DISTINCT d.subject
-        FROM documents d
-        JOIN downloads dl ON d.document_id = dl.document_id
-        WHERE dl.user_id = $1 AND d.subject IS NOT NULL
-      )
-      SELECT 
-        d.document_id,
-        d.title,
-        d.description,
-        d.thumbnail_url,
-        d.download_count,
-        d.average_rating as rating,
-        d.created_at,
-        u.full_name as author_name,
-        u.user_id as author_id
-      FROM documents d
-      JOIN users u ON d.author_id = u.user_id
-      WHERE d.status = 'approved'
-        AND d.author_id != $1
-        AND d.document_id NOT IN (
-          SELECT document_id FROM downloads WHERE user_id = $1
-        )
-        AND (
-          d.subject IN (SELECT subject FROM user_subjects)
-          OR (SELECT COUNT(*) FROM user_subjects) = 0
-        )
-      ORDER BY d.average_rating DESC, d.download_count DESC
-      LIMIT $2
-    `;
+    // Try collaborative filtering first (if tables exist)
+    try {
+      recommendations = await recommendationService.getCollaborativeRecommendations(userId, limit);
+      if (recommendations.length > 0) {
+        source = 'collaborative';
+      }
+    } catch (error) {
+      console.log('Collaborative filtering not available:', error.message);
+    }
 
-    const result = await pool.query(query, [userId, limit]);
+    // If no collaborative recommendations, try content-based on user's downloads
+    if (recommendations.length === 0) {
+      try {
+        const query = `
+          WITH user_subjects AS (
+            SELECT DISTINCT d.subject
+            FROM documents d
+            JOIN downloads dl ON d.document_id = dl.document_id
+            WHERE dl.user_id = $1 AND d.subject IS NOT NULL
+            LIMIT 5
+          )
+          SELECT 
+            d.document_id,
+            d.title,
+            d.description,
+            d.thumbnail_url,
+            d.download_count,
+            d.average_rating as rating,
+            d.created_at,
+            u.full_name as author_name,
+            u.user_id as author_id
+          FROM documents d
+          JOIN users u ON d.author_id = u.user_id
+          WHERE d.status = 'approved'
+            AND d.author_id != $1
+            AND d.document_id NOT IN (
+              SELECT document_id FROM downloads WHERE user_id = $1
+            )
+            AND (
+              d.subject IN (SELECT subject FROM user_subjects)
+              OR NOT EXISTS (SELECT 1 FROM user_subjects)
+            )
+          ORDER BY d.average_rating DESC, d.download_count DESC
+          LIMIT $2
+        `;
+
+        const result = await pool.query(query, [userId, limit]);
+        recommendations = result.rows;
+        if (recommendations.length > 0) {
+          source = 'content-based';
+        }
+      } catch (error) {
+        console.log('Content-based filtering error:', error.message);
+      }
+    }
+
+    // If still no results, get popular documents
+    if (recommendations.length === 0) {
+      try {
+        recommendations = await recommendationService.getPopularDocuments(limit);
+        source = 'popular';
+      } catch (error) {
+        console.log('Popular documents error:', error.message);
+      }
+    }
+
+    console.log(`Recommendations source: ${source}, count: ${recommendations.length}`);
 
     res.status(200).json({
-      documents: result.rows,
-      total: result.rowCount,
-      isFallback: result.rowCount === 0
+      documents: recommendations,
+      total: recommendations.length,
+      source: source
     });
   } catch (error) {
     console.error('Error fetching recommended docs:', error);

@@ -9,8 +9,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { Container, Row, Col, Card, Spinner, Alert } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import apiClient from '../services/api';
+import QuestionDetailModal from '../components/questions/QuestionDetailModal';
 
 interface Document {
   document_id: string;
@@ -32,6 +33,7 @@ interface QAItem {
 }
 
 const MyFeedPage: React.FC = () => {
+  const navigate = useNavigate();
   const [followingDocs, setFollowingDocs] = useState<Document[]>([]);
   const [trendingDocs, setTrendingDocs] = useState<Document[]>([]);
   const [recommendedDocs, setRecommendedDocs] = useState<Document[]>([]);
@@ -48,6 +50,8 @@ const MyFeedPage: React.FC = () => {
     recommended: '',
     hotqa: '',
   });
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+  const [showQuestionModal, setShowQuestionModal] = useState(false);
 
   useEffect(() => {
     fetchFollowingDocs();
@@ -83,6 +87,8 @@ const MyFeedPage: React.FC = () => {
   const fetchRecommendedDocs = async () => {
     try {
       const response = await apiClient.get('/feed/recommendations');
+      console.log('Recommendations response:', response.data);
+      console.log('Documents count:', response.data.documents?.length);
       setRecommendedDocs(response.data.documents || []);
       setLoading((prev) => ({ ...prev, recommended: false }));
     } catch (error: any) {
@@ -124,16 +130,18 @@ const MyFeedPage: React.FC = () => {
             <div className="horizontal-scroll-container pb-3">
               <div className="d-flex gap-3" style={{ overflowX: 'auto' }}>
                 {followingDocs.map((doc) => (
-                  <Card key={doc.document_id} style={{ minWidth: '280px', maxWidth: '280px' }} className="card-hover">
+                  <Card 
+                    key={doc.document_id} 
+                    style={{ minWidth: '280px', maxWidth: '280px', cursor: 'pointer' }} 
+                    className="card-hover"
+                    onClick={() => navigate(`/documents/${doc.document_id}`)}
+                  >
                     <Card.Img variant="top" src={doc.thumbnail_url || '/placeholder.png'} style={{ height: '160px', objectFit: 'cover' }} />
                     <Card.Body>
                       <Card.Title className="text-truncate" style={{ fontSize: '1rem' }}>{doc.title}</Card.Title>
-                      <Card.Text className="text-muted small">
+                      <Card.Text className="text-muted small mb-0">
                         <i className="bi bi-person me-1"></i> {doc.author_name}
                       </Card.Text>
-                      <Link to={`/documents/${doc.document_id}`} className="btn btn-sm btn-primary">
-                        Xem chi tiết
-                      </Link>
                     </Card.Body>
                   </Card>
                 ))}
@@ -194,22 +202,27 @@ const MyFeedPage: React.FC = () => {
             </div>
           ) : errors.recommended ? (
             <Alert variant="danger">{errors.recommended}</Alert>
+          ) : recommendedDocs.length === 0 ? (
+            <Alert variant="info">
+              Chưa có gợi ý nào cho bạn. Hãy <Link to="/documents">tải xuống</Link> một số tài liệu để nhận gợi ý phù hợp!
+            </Alert>
           ) : (
             <Row className="g-3">
               {recommendedDocs.slice(0, 20).map((doc) => (
                 <Col xs={12} sm={6} md={4} lg={3} key={doc.document_id}>
-                  <Card className="h-100 card-hover">
+                <Card
+                    className="h-100 card-hover"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/documents/${doc.document_id}`)}
+                >
                     <Card.Img variant="top" src={doc.thumbnail_url || '/placeholder.png'} style={{ height: '140px', objectFit: 'cover' }} />
                     <Card.Body>
-                      <Card.Title className="text-truncate" style={{ fontSize: '0.95rem' }}>{doc.title}</Card.Title>
-                      <Card.Text className="text-muted small">
-                        <i className="bi bi-person me-1"></i> {doc.author_name}
-                      </Card.Text>
-                      <Link to={`/documents/${doc.document_id}`} className="btn btn-sm btn-outline-primary w-100">
-                        Xem
-                      </Link>
+                        <Card.Title className="text-truncate" style={{ fontSize: '0.95rem' }}>{doc.title}</Card.Title>
+                        <Card.Text className="text-muted small">
+                            <i className="bi bi-person me-1"></i> {doc.author_name}
+                        </Card.Text>
                     </Card.Body>
-                  </Card>
+                </Card>
                 </Col>
               ))}
             </Row>
@@ -233,13 +246,18 @@ const MyFeedPage: React.FC = () => {
             <Row className="g-3">
               {hotQA.slice(0, 5).map((qa) => (
                 <Col xs={12} key={qa.question_id}>
-                  <Card className="card-hover">
+                  <Card 
+                    className="card-hover" 
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setSelectedQuestionId(qa.question_id);
+                      setShowQuestionModal(true);
+                    }}
+                  >
                     <Card.Body>
                       <div className="d-flex justify-content-between align-items-start">
                         <div className="flex-grow-1">
-                          <Link to={`/qa/${qa.question_id}`} className="text-decoration-none">
-                            <Card.Title style={{ fontSize: '1rem' }}>{qa.title}</Card.Title>
-                          </Link>
+                          <Card.Title style={{ fontSize: '1rem' }}>{qa.title}</Card.Title>
                           <Card.Text className="text-muted small mb-0">
                             <i className="bi bi-person me-1"></i> {qa.author_name}
                             <span className="mx-2">•</span>
@@ -258,6 +276,18 @@ const MyFeedPage: React.FC = () => {
           )}
         </Col>
       </Row>
+
+      {/* Question Detail Modal */}
+      {selectedQuestionId && (
+        <QuestionDetailModal
+          show={showQuestionModal}
+          onHide={() => {
+            setShowQuestionModal(false);
+            setSelectedQuestionId(null);
+          }}
+          questionId={selectedQuestionId}
+        />
+      )}
     </Container>
   );
 };

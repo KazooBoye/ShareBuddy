@@ -72,13 +72,13 @@ const getCollaborativeRecommendations = async (userId, limit = 10) => {
         d.created_at,
         u.user_id,
         u.username,
-        u.full_name,
+        u.full_name as author_name,
         u.avatar_url,
         u.is_verified_author,
         COUNT(DISTINCT i.user_id) as liked_by_similar_users,
         AVG(i.interaction_value) FILTER (WHERE i.interaction_type = 'rate') as avg_rating_by_similar
        FROM documents d
-       JOIN users u ON d.user_id = u.user_id
+       JOIN users u ON d.author_id = u.user_id
        JOIN user_document_interactions i ON d.document_id = i.document_id
        WHERE i.user_id = ANY($1)
          AND d.document_id NOT IN (
@@ -104,7 +104,7 @@ const getContentBasedRecommendations = async (documentId, limit = 5) => {
   try {
     const result = await query(
       `WITH current_doc AS (
-        SELECT university, subject, user_id as author_id
+        SELECT university, subject, author_id
         FROM documents
         WHERE document_id = $1
       )
@@ -119,17 +119,17 @@ const getContentBasedRecommendations = async (documentId, limit = 5) => {
         d.thumbnail_url,
         u.user_id,
         u.username,
-        u.full_name,
+        u.full_name as author_name,
         u.is_verified_author,
         CASE
           WHEN d.university = cd.university AND d.subject = cd.subject THEN 3
           WHEN d.university = cd.university THEN 2
           WHEN d.subject = cd.subject THEN 2
-          WHEN d.user_id = cd.author_id THEN 1
+          WHEN d.author_id = cd.author_id THEN 1
           ELSE 0
         END as similarity_score
        FROM documents d
-       JOIN users u ON d.user_id = u.user_id
+       JOIN users u ON d.author_id = u.user_id
        CROSS JOIN current_doc cd
        WHERE d.document_id != $1
          AND d.status = 'approved'
@@ -161,11 +161,11 @@ const getPopularDocuments = async (limit = 10) => {
         d.thumbnail_url,
         u.user_id,
         u.username,
-        u.full_name,
+        u.full_name as author_name,
         u.avatar_url,
         u.is_verified_author
        FROM documents d
-       JOIN users u ON d.user_id = u.user_id
+       JOIN users u ON d.author_id = u.user_id
        WHERE d.status = 'approved'
        ORDER BY 
          (d.download_count * 2 + d.view_count + d.average_rating * 10) DESC,

@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Card, Button, Badge, Form, Alert, Spinner } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { questionService } from '../../services/questionService';
 import { toast } from 'react-toastify';
@@ -166,6 +167,36 @@ const QuestionDetailModal: React.FC<QuestionDetailModalProps> = ({ show, onHide,
           </Alert>
         ) : (
           <>
+            {/* Document Reference */}
+            {question.documentId && question.documentTitle && (
+              <Alert variant="info" className="mb-3 d-flex align-items-center gap-2">
+                <i className="bi bi-file-earmark-text fs-4"></i>
+                <div className="flex-grow-1">
+                  <small className="text-muted d-block">Câu hỏi về tài liệu:</small>
+                  <Link 
+                    to={`/documents/${question.documentId}`} 
+                    className="text-decoration-none fw-bold"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onHide();
+                    }}
+                  >
+                    {question.documentTitle}
+                  </Link>
+                </div>
+                <Link 
+                  to={`/documents/${question.documentId}`}
+                  className="btn btn-sm btn-outline-primary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onHide();
+                  }}
+                >
+                  Xem tài liệu
+                </Link>
+              </Alert>
+            )}
+
             {/* Question */}
             <Card className="mb-4 border-0 shadow-sm">
               <Card.Body>
