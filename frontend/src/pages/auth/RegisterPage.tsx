@@ -2,11 +2,88 @@
  * Register Page for ShareBuddy
  */
 
-import React, { useState } from 'react';
-import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Container, Row, Col, Card, Form, Button, Alert, ProgressBar, Spinner } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { RegisterForm } from '../../types';
+import apiClient from '../../services/api';
+
+// Debounce helper
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
+// Password strength calculator
+const calculatePasswordStrength = (password: string): { score: number; feedback: string; color: string } => {
+  if (!password) return { score: 0, feedback: '', color: 'secondary' };
+
+  let score = 0;
+  const feedback: string[] = [];
+
+  // Length check
+  if (password.length >= 8) {
+    score += 25;
+  } else {
+    feedback.push('Ít nhất 8 ký tự');
+  }
+
+  // Uppercase check
+  if (/[A-Z]/.test(password)) {
+    score += 25;
+  } else {
+    feedback.push('Chữ hoa');
+  }
+
+  // Lowercase check
+  if (/[a-z]/.test(password)) {
+    score += 25;
+  } else {
+    feedback.push('Chữ thường');
+  }
+
+  // Number or special char check
+  if (/[0-9]/.test(password) || /[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    score += 25;
+  } else {
+    feedback.push('Số hoặc ký tự đặc biệt');
+  }
+
+  let strengthText = '';
+  let color = 'danger';
+
+  if (score <= 25) {
+    strengthText = 'Yếu';
+    color = 'danger';
+  } else if (score <= 50) {
+    strengthText = 'Trung bình';
+    color = 'warning';
+  } else if (score <= 75) {
+    strengthText = 'Khá';
+    color = 'info';
+  } else {
+    strengthText = 'Mạnh';
+    color = 'success';
+  }
+
+  const feedbackText = feedback.length > 0 
+    ? `Cần thêm: ${feedback.join(', ')}` 
+    : 'Mật khẩu mạnh!';
+
+  return { score, feedback: `${strengthText} - ${feedbackText}`, color };
+};
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -23,6 +100,71 @@ const RegisterPage: React.FC = () => {
   });
 
   const [acceptTerms, setAcceptTerms] = useState(false);
+  
+  // Validation states
+  const [usernameStatus, setUsernameStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    message: string;
+  }>({ checking: false, available: null, message: '' });
+
+  const [passwordStrength, setPasswordStrength] = useState({ score: 0, feedback: '', color: 'secondary' });
+  const [passwordsMatch, setPasswordsMatch] = useState<boolean | null>(null);
+
+  // Debounced username for API check
+  const debouncedUsername = useDebounce(formData.username, 500);
+
+  // Check username availability
+  useEffect(() => {
+    const checkUsername = async () => {
+      if (!debouncedUsername || debouncedUsername.length < 3) {
+        setUsernameStatus({ checking: false, available: null, message: '' });
+        return;
+      }
+
+      setUsernameStatus({ checking: true, available: null, message: '' });
+
+      try {
+        const response = await apiClient.get(`/auth/check-username?username=${debouncedUsername}`);
+        const available = response.data.available;
+        
+        setUsernameStatus({
+          checking: false,
+          available,
+          message: available 
+            ? '✓ Tên đăng nhập có thể sử dụng' 
+            : '✗ Tên đăng nhập đã được sử dụng'
+        });
+      } catch (err) {
+        setUsernameStatus({
+          checking: false,
+          available: null,
+          message: ''
+        });
+      }
+    };
+
+    checkUsername();
+  }, [debouncedUsername]);
+
+  // Check password strength
+  useEffect(() => {
+    if (formData.password) {
+      const strength = calculatePasswordStrength(formData.password);
+      setPasswordStrength(strength);
+    } else {
+      setPasswordStrength({ score: 0, feedback: '', color: 'secondary' });
+    }
+  }, [formData.password]);
+
+  // Check password match
+  useEffect(() => {
+    if (formData.confirmPassword) {
+      setPasswordsMatch(formData.password === formData.confirmPassword);
+    } else {
+      setPasswordsMatch(null);
+    }
+  }, [formData.password, formData.confirmPassword]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -45,6 +187,16 @@ const RegisterPage: React.FC = () => {
     if (formData.password !== formData.confirmPassword) {
       alert('Mật khẩu xác nhận không khớp');
       return;
+    }
+
+    if (usernameStatus.available === false) {
+      alert('Tên đăng nhập đã được sử dụng, vui lòng chọn tên khác');
+      return;
+    }
+
+    if (passwordStrength.score < 50) {
+      const confirm = window.confirm('Mật khẩu của bạn chưa đủ mạnh. Bạn có muốn tiếp tục?');
+      if (!confirm) return;
     }
 
     const result = await register(formData);
@@ -75,14 +227,33 @@ const RegisterPage: React.FC = () => {
                   <Col md={6}>
                     <Form.Group className="mb-3">
                       <Form.Label>Tên đăng nhập *</Form.Label>
-                      <Form.Control
-                        type="text"
-                        name="username"
-                        value={formData.username}
-                        onChange={handleChange}
-                        placeholder="Nhập tên đăng nhập"
-                        required
-                      />
+                      <div className="position-relative">
+                        <Form.Control
+                          type="text"
+                          name="username"
+                          value={formData.username}
+                          onChange={handleChange}
+                          placeholder="Nhập tên đăng nhập"
+                          required
+                          isValid={usernameStatus.available === true}
+                          isInvalid={usernameStatus.available === false}
+                        />
+                        {usernameStatus.checking && (
+                          <Spinner 
+                            animation="border" 
+                            size="sm" 
+                            className="position-absolute top-50 end-0 translate-middle-y me-3"
+                          />
+                        )}
+                      </div>
+                      {usernameStatus.message && (
+                        <Form.Text className={usernameStatus.available ? 'text-success' : 'text-danger'}>
+                          {usernameStatus.message}
+                        </Form.Text>
+                      )}
+                      <Form.Text className="text-muted d-block">
+                        Tối thiểu 3 ký tự
+                      </Form.Text>
                     </Form.Group>
                   </Col>
                   <Col md={6}>
@@ -151,6 +322,20 @@ const RegisterPage: React.FC = () => {
                         placeholder="Nhập mật khẩu"
                         required
                       />
+                      {formData.password && (
+                        <>
+                          <div className="mt-2">
+                            <ProgressBar 
+                              now={passwordStrength.score} 
+                              variant={passwordStrength.color}
+                              style={{ height: '5px' }}
+                            />
+                          </div>
+                          <Form.Text className={`text-${passwordStrength.color}`}>
+                            {passwordStrength.feedback}
+                          </Form.Text>
+                        </>
+                      )}
                     </Form.Group>
                   </Col>
                   <Col md={6}>
@@ -163,7 +348,19 @@ const RegisterPage: React.FC = () => {
                         onChange={handleChange}
                         placeholder="Nhập lại mật khẩu"
                         required
+                        isValid={passwordsMatch === true}
+                        isInvalid={passwordsMatch === false}
                       />
+                      {passwordsMatch === true && (
+                        <Form.Text className="text-success">
+                          ✓ Mật khẩu khớp
+                        </Form.Text>
+                      )}
+                      {passwordsMatch === false && (
+                        <Form.Text className="text-danger">
+                          ✗ Mật khẩu không khớp
+                        </Form.Text>
+                      )}
                     </Form.Group>
                   </Col>
                 </Row>

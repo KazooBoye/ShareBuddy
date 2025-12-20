@@ -62,6 +62,9 @@ router.post('/reset-password', authController.resetPassword);
 router.get('/verify-email/:token', authController.verifyEmail);
 router.post('/resend-verification', authLimiter, authController.resendVerification);
 
+// Username availability check (public, no auth required)
+router.get('/check-username', authController.checkUsername);
+
 // OAuth routes
 router.get('/google', authController.googleAuth);
 router.get('/google/callback', authController.googleCallback);

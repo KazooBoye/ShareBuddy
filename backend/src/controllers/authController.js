@@ -660,6 +660,33 @@ const completeOAuthProfile = async (req, res) => {
   }
 };
 
+// Check username availability
+const checkUsername = async (req, res, next) => {
+  try {
+    const { username } = req.query;
+
+    if (!username || username.length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username phải có ít nhất 3 ký tự'
+      });
+    }
+
+    const result = await query(
+      'SELECT user_id FROM users WHERE username = $1',
+      [username]
+    );
+
+    return res.status(200).json({
+      success: true,
+      available: result.rows.length === 0
+    });
+  } catch (error) {
+    console.error('Check username error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -676,5 +703,6 @@ module.exports = {
   getMe,
   updateProfile,
   changePassword,
-  completeOAuthProfile
+  completeOAuthProfile,
+  checkUsername
 };
