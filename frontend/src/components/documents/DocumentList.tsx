@@ -77,6 +77,12 @@ const DocumentList: React.FC<DocumentListProps> = ({
     
     const maxCreditCost = searchParams.get('maxCreditCost');
     if (maxCreditCost) filters.maxCreditCost = parseInt(maxCreditCost);
+
+    const isVerifiedAuthor = searchParams.get('isVerifiedAuthor');
+    if (isVerifiedAuthor === 'true') filters.isVerifiedAuthor = true;
+
+    const year = searchParams.get('year');
+    if (year) filters.year = parseInt(year);
     
     const tags = searchParams.get('tags');
     if (tags) {

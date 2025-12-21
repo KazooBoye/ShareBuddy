@@ -22,6 +22,9 @@ All notable changes to ShareBuddy project will be documented in this file.
 ### Search-Vector implement
 - Implement Search-Vector for seperate queries with ( _ ) character and words > 5
 
+- **Issues Founded**: 
+  - The filters for verified_author, maxcost, time not working
+  - The email which was verified but the warning "Chưa xác minh" still appears
 
 ## [1.6.3] - 2025-12-20
 

@@ -29,8 +29,8 @@ const getDocuments = async (req, res, next) => {
       university,
       major,
       minRating,
-      maxCost,
-      verifiedAuthor,
+      maxCreditCost,
+      isVerifiedAuthor,
       year,
       authorId,
       sortBy = 'created_at',
@@ -73,13 +73,13 @@ const getDocuments = async (req, res, next) => {
       queryParams.push(parseFloat(minRating));
     }
 
-    if (maxCost) {
+    if (maxCreditCost) {
       paramCount++;
       whereConditions.push(`d.credit_cost <= $${paramCount}`);
-      queryParams.push(parseInt(maxCost));
+      queryParams.push(parseInt(maxCreditCost));
     }
 
-    if (verifiedAuthor === 'true' || verifiedAuthor === true) {
+    if (isVerifiedAuthor === 'true' || isVerifiedAuthor === true || isVerifiedAuthor === 1) {
       whereConditions.push(`u.is_verified_author = true`);
     }
 

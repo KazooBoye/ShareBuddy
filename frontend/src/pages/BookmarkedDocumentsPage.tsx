@@ -54,8 +54,8 @@ const BookmarkedDocumentsPage: React.FC = () => {
     const maxCreditCost = searchParams.get('maxCreditCost');
     if (maxCreditCost) filters.maxCreditCost = parseInt(maxCreditCost);
 
-    const verifiedAuthor = searchParams.get('verifiedAuthor');
-    if (verifiedAuthor === 'true') filters.verifiedAuthor = true;
+    const isVerifiedAuthor = searchParams.get('isVerifiedAuthor');
+    if (isVerifiedAuthor === 'true') filters.isVerifiedAuthor = true;
 
     const year = searchParams.get('year');
     if (year) filters.year = parseInt(year);
@@ -66,29 +66,12 @@ const BookmarkedDocumentsPage: React.FC = () => {
     return filters;
   }, [searchParams]);
 
-  // Update URL with filters
-  const updateUrlParams = useCallback((filters: DocumentSearchParams) => {
-    const params = new URLSearchParams();
-    
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        if (Array.isArray(value)) {
-          params.set(key, value.join(','));
-        } else {
-          params.set(key, String(value));
-        }
-      }
-    });
-
-    setUrlSearchParams(params, { replace: true });
-  }, [setUrlSearchParams]);
-
   // Load bookmarked documents when URL params change
   useEffect(() => {
     const filters = getFiltersFromUrl();
     dispatch(fetchBookmarkedDocuments(filters));
-  }, [dispatch, getFiltersFromUrl]);
-
+  }, [dispatch, searchParams, getFiltersFromUrl]);
+  
   // Debounced search effect - triggers 500ms after user stops typing
   useEffect(() => {
     const urlSearch = searchParams.get('search') || '';
@@ -101,14 +84,7 @@ const BookmarkedDocumentsPage: React.FC = () => {
       }
       
       searchTimeoutRef.current = setTimeout(() => {
-        const filters = getFiltersFromUrl();
-        filters.search = searchInput || undefined;
-        filters.page = 1;
-        updateUrlParams(filters);
-        // Dispatch explicitly with updated filters
-        dispatch(fetchBookmarkedDocuments(filters));
-        // Restore focus after search
-        setTimeout(() => searchInputRef.current?.focus(), 100);
+        handleFilterChange({ search: searchInput || undefined });
       }, 500);
 
       return () => {
@@ -117,7 +93,7 @@ const BookmarkedDocumentsPage: React.FC = () => {
         }
       };
     }
-  }, [searchInput]); // Only searchInput
+  }, [searchInput]); // Only depend on searchInput
 
   // Handle immediate search on Enter key
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -127,45 +103,62 @@ const BookmarkedDocumentsPage: React.FC = () => {
       clearTimeout(searchTimeoutRef.current);
     }
     // Trigger search immediately
-    const filters = getFiltersFromUrl();
-    filters.search = searchInput || undefined;
-    filters.page = 1;
-    updateUrlParams(filters);
-    // Dispatch explicitly with updated filters
-    dispatch(fetchBookmarkedDocuments(filters));
+    handleFilterChange({ search: searchInput || undefined });
     // Maintain focus
     searchInputRef.current?.focus();
   };
 
-  // Handle filter change
+  // Handle filter changes
   const handleFilterChange = (newFilters: Partial<DocumentSearchParams>) => {
     const currentFilters = getFiltersFromUrl();
-    const updatedFilters = { ...currentFilters, ...newFilters, page: 1 };
-    updateUrlParams(updatedFilters);
-    dispatch(fetchBookmarkedDocuments(updatedFilters));
+    // Only reset to page 1 if we're changing filters other than page
+    const shouldResetPage = !('page' in newFilters) && Object.keys(newFilters).length > 0;
+    const updatedFilters = { 
+      ...currentFilters, 
+      ...newFilters,
+      ...(shouldResetPage ? { page: 1 } : {})
+    };
+    
+    // Update URL params
+    const newSearchParams = new URLSearchParams();
+
+    Object.entries(updatedFilters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+
+        // Handle boolean values
+        if (key === 'isVerifiedAuthor') {
+          if (value === true) newSearchParams.set(key, 'true');
+          return;
+        }
+        // Handle array values (like tags)
+        if (Array.isArray(value)) {
+          if (value.length > 0) {
+            newSearchParams.set(key, value.join(','));
+          }
+        } else {
+          newSearchParams.set(key, value.toString());
+        }
+      }
+    });
+    setUrlSearchParams(newSearchParams);
   };
 
   // Handle sort change
   const handleSortChange = (newSortBy: string) => {
     setSortBy(newSortBy);
-    const filters = getFiltersFromUrl();
-    filters.sortBy = newSortBy as any;
-    filters.page = 1;
-    updateUrlParams(filters);
-    dispatch(fetchBookmarkedDocuments(filters));
+    handleFilterChange({ sortBy: newSortBy as any });
   };
 
   // Handle page change
-  const handlePageChange = (newPage: number) => {
-    const filters = getFiltersFromUrl();
-    filters.page = newPage;
-    updateUrlParams(filters);
-    dispatch(fetchBookmarkedDocuments(filters));
+  const handlePageChange = (page: number) => {
+    handleFilterChange({ page });
+    // Scroll to top when page changes
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Handle document download
   const handleDocumentDownload = useCallback((documentId: string) => {
+      // Refresh documents to update download count
     const filters = getFiltersFromUrl();
     dispatch(fetchBookmarkedDocuments(filters));
   }, [dispatch, getFiltersFromUrl]);
@@ -353,7 +346,7 @@ const BookmarkedDocumentsPage: React.FC = () => {
         <Offcanvas.Header closeButton>
           <Offcanvas.Title>
             <FaFilter className="me-2" />
-            Bộ lọc
+            Bộ lọc nâng cao
           </Offcanvas.Title>
         </Offcanvas.Header>
         <Offcanvas.Body>

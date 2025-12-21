@@ -56,6 +56,8 @@ services:
       - REDIS_PORT=6379
       - MODERATION_SERVICE_URL=http://moderation-service:5002
       - MODERATION_WEBHOOK_SECRET=${MODERATION_WEBHOOK_SECRET:-default-webhook-secret-change-in-production}
+      # NEW: Gotenberg for Office conversion
+      - GOTENBERG_URL=http://gotenberg:3000
     volumes:
       - backend-uploads:/app/uploads
       - upload-temp:/app/uploads/temp
@@ -117,6 +119,30 @@ services:
       retries: 3
       start_period: 40s
 
+  #Gotenberg Service (Document Conversion)
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: sharebuddy-gotenberg
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    command:
+      - "gotenberg"
+      - "--api-timeout=30s"
+      - "--api-timeout-duration=30s"
+    networks:
+      - sharebuddy-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
   # Frontend Service
   frontend:
     build:
@@ -146,6 +172,10 @@ services:
 volumes:
   backend-uploads:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/sharebuddy/uploads
   upload-temp:
     driver: local
   redis-data:

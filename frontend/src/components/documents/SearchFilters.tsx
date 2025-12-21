@@ -40,7 +40,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
       debounce((key: keyof DocumentSearchParams, value: any) => {
         setFilters((prevFilters) => {
           const newFilters = { ...prevFilters, [key]: value };
-          onFilterChange(newFilters);
+          onFilterChange({ [key]: value });
           return newFilters;
         });
       }, 500),
@@ -49,8 +49,8 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
 
   const handleFilterChange = (key: keyof DocumentSearchParams, value: any) => {
     const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
-    onFilterChange(newFilters);
+    setFilters(prev => ({ ...prev, [key]: value }));
+    onFilterChange({ [key]: value });
   };
 
   const handleTextInputChange = (key: keyof DocumentSearchParams, value: string) => {
@@ -67,11 +67,19 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
     setFilters(clearedFilters);
     setLocalSubject('');
     setTagInput('');
-    onFilterChange(clearedFilters);
+    onFilterChange({
+      subject: undefined,
+      minRating: undefined,
+      maxCreditCost: undefined,
+      isVerifiedAuthor: undefined,
+      year: undefined,
+      tags: undefined,
+      page: 1
+    });
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.subject || filters.minRating || filters.maxCreditCost || filters.verifiedAuthor || filters.year || (filters.tags && filters.tags.length > 0));
+    return !!(filters.subject || filters.minRating || filters.maxCreditCost || filters.isVerifiedAuthor || filters.year || (filters.tags && filters.tags.length > 0));
   };
 
   // --------------------------------------------------------------------------
@@ -236,8 +244,10 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
           <Form.Check
             type="checkbox"
             label="Từ Verified Author"
-            checked={filters.verifiedAuthor || false}
-            onChange={(e) => handleFilterChange('verifiedAuthor', e.target.checked || undefined)}
+            checked={filters.isVerifiedAuthor || false}
+            onChange={(e) =>
+              handleFilterChange('isVerifiedAuthor', e.target.checked ? true : undefined)
+            }
           />
         </Col>
 
@@ -373,14 +383,14 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
                 </Badge>
               )}
               
-              {filters.verifiedAuthor && (
+              {filters.isVerifiedAuthor && (
                 <Badge bg="primary" className="me-1 mb-1">
                   Verified Author
                   <Button
                     variant="link"
                     size="sm"
                     className="p-0 ms-1 text-white"
-                    onClick={() => handleFilterChange('verifiedAuthor', undefined)}
+                    onClick={() => handleFilterChange('isVerifiedAuthor', undefined)}
                   >
                     <i className="bi bi-x" />
                   </Button>

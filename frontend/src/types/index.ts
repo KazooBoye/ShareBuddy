@@ -272,7 +272,7 @@ export interface DocumentUploadForm {
   tags?: string | string[];
 }
 
-// UPDATED: Added verifiedAuthor, year, university, fileType, verifiedOnly
+// UPDATED: Added isVerifiedAuthor, year, university, fileType, verifiedOnly
 export interface DocumentSearchParams {
   search?: string;
   category?: string;
@@ -281,7 +281,7 @@ export interface DocumentSearchParams {
   minRating?: number;
   maxCreditCost?: number;
   fileType?: string; // NEW: For search API (pdf, docx, pptx, etc.)
-  verifiedAuthor?: boolean; // For regular documents endpoint
+  isVerifiedAuthor?: boolean; // For regular documents endpoint
   verifiedOnly?: boolean; // NEW: For search API
   year?: number; // NEW
   authorId?: string; // NEW: To filter by specific author
