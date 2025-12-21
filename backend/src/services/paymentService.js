@@ -182,13 +182,12 @@ const handlePaymentSuccess = async (paymentIntent) => {
 
       // Create credit transaction record
       await client.query(
-        `INSERT INTO credit_transactions (user_id, amount, transaction_type, reference_id, description)
-         VALUES ($1, $2, $3, $4, $5)`,
+        `INSERT INTO credit_transactions (user_id, amount, transaction_type, description)
+         VALUES ($1, $2, $3, $4)`,
         [
           user_id,
           credits_purchased,
           'purchase',
-          paymentIntent.id,
           `Purchased ${credits_purchased} credits via Stripe`
         ]
       );
@@ -290,13 +289,12 @@ const handleRefund = async (charge) => {
 
       // Create credit transaction record
       await client.query(
-        `INSERT INTO credit_transactions (user_id, amount, transaction_type, reference_id, description)
-         VALUES ($1, $2, $3, $4, $5)`,
+        `INSERT INTO credit_transactions (user_id, amount, transaction_type, description)
+         VALUES ($1, $2, $3, $4)`,
         [
           user_id,
           -credits_purchased,
           'penalty',
-          paymentIntentId,
           `Refund: ${credits_purchased} credits deducted`
         ]
       );
