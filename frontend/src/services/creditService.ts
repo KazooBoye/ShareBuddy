@@ -57,20 +57,7 @@ export const creditService = {
 
     return apiRequest('GET', url);
   },
-
-  // Get credit packages
-  getCreditPackages: async (): Promise<ApiResponse<any[]>> => {
-    return apiRequest('GET', 'credits/packages');
-  },
-
-  // Purchase credits
-  purchaseCredits: async (
-    amount: number,
-    paymentMethod: 'momo' | 'vnpay' | 'banking'
-  ): Promise<ApiResponse<any>> => {
-    return apiRequest('POST', 'credits/purchase', { amount, paymentMethod });
-  },
-
+  
   // Transfer credits to another user
   transferCredits: async (
     targetUserId: string,
