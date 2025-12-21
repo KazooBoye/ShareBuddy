@@ -274,16 +274,9 @@ class NodeCanvasFactory {
   }
 }
 
-// --- Image class for embedded images in PDFs ---
-class NodeCanvasImage extends Image {
-  constructor(width, height) {
-    super(width, height);
-  }
-}
-
-// Set global Image for pdfjs-dist
+// Set global Image for pdfjs-dist - use canvas's Image class directly
 if (typeof global.Image === 'undefined') {
-  global.Image = NodeCanvasImage;
+  global.Image = Image;
 }
 
 // FIX: Added proper response
