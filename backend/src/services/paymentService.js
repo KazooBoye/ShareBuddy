@@ -196,7 +196,7 @@ const handlePaymentSuccess = async (paymentIntent) => {
 
       // Create notification
       await client.query(
-        `INSERT INTO notifications (user_id, type, title, message)
+        `INSERT INTO notifications (user_id, type, title, content)
          VALUES ($1, $2, $3, $4)`,
         [
           user_id,
