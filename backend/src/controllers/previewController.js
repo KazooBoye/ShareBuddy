@@ -188,11 +188,17 @@ const generateThumbnailInternal = async (documentId) => {
     const context = canvas.getContext('2d');
     console.log(`${logPrefix} 🖼️ Canvas created`);
 
-    await page.render({
+    // Create render context with proper image/canvas support
+    const renderContext = {
       canvasContext: context,
       viewport: scaledViewport,
       canvasFactory: new NodeCanvasFactory(),
-    }).promise;
+      // CRITICAL: Provide Image class to pdfjs-dist
+      imageLayer: null,
+      background: 'white'
+    };
+
+    await page.render(renderContext).promise;
     console.log(`${logPrefix} ✅ Page rendered to canvas`);
 
     const buffer = canvas.toBuffer('image/png');
@@ -276,25 +282,35 @@ class NodeCanvasFactory {
   }
 }
 
-// CRITICAL FIX: Set up global DOM-like environment for pdfjs-dist
-// pdfjs-dist expects these to be available globally in Node.js
-if (typeof global.DOMMatrix === 'undefined') {
-  // Polyfill DOMMatrix if needed
-  global.DOMMatrix = class DOMMatrix {
-    constructor() {
-      this.a = 1; this.b = 0; this.c = 0; this.d = 1; this.e = 0; this.f = 0;
-    }
-  };
-}
+// CRITICAL FIX: Patch canvas context to properly handle image drawing
+const { CanvasRenderingContext2D } = require('canvas');
+const originalDrawImage = CanvasRenderingContext2D.prototype.drawImage;
 
-// Set canvas's Image class globally - this is critical for embedded images in PDFs
+CanvasRenderingContext2D.prototype.drawImage = function(image, ...args) {
+  // Ensure image is a valid canvas Image or Canvas
+  if (image && typeof image === 'object') {
+    // Check if it's already a canvas Image or Canvas - if so, use it directly
+    if (image.constructor.name === 'Image' || image.constructor.name === 'Canvas') {
+      return originalDrawImage.call(this, image, ...args);
+    }
+    // If it has a canvas property (from pdfjs), extract it
+    if (image.canvas) {
+      return originalDrawImage.call(this, image.canvas, ...args);
+    }
+  }
+  // Fallback to original
+  return originalDrawImage.call(this, image, ...args);
+};
+
+// Set canvas's Image class globally
 if (typeof global.Image === 'undefined') {
   global.Image = Image;
 }
 
-// Also set Canvas globally
+// Set Canvas globally
 if (typeof global.Canvas === 'undefined') {
-  global.Canvas = createCanvas(0, 0).constructor;
+  const dummyCanvas = createCanvas(0, 0);
+  global.Canvas = dummyCanvas.constructor;
 }
 
 // FIX: Added proper response
