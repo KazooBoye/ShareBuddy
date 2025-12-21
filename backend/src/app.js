@@ -101,8 +101,16 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Static files - serve uploaded documents
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+//Static files in docker - serve public assets
+app.use(
+  '/uploads',
+  express.static(uploadPath, {
+    maxAge: '1d',
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+  })
+);
 
 // API Routes - Enable routes for testing
 app.use('/api/auth', authRoutes);
