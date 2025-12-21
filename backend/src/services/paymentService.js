@@ -6,6 +6,16 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { query, withTransaction } = require('../config/database');
 
+
+// Validate Stripe configuration
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('STRIPE_SECRET_KEY is not set');
+}
+
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  console.warn('STRIPE_WEBHOOK_SECRET is not set - webhooks will not work');
+}
+
 // Get available credit packages
 const getCreditPackages = async () => {
   try {
@@ -18,6 +28,7 @@ const getCreditPackages = async () => {
     
     return result.rows;
   } catch (error) {
+    console.error('Error fetching credit packages:', error);
     throw error;
   }
 };
@@ -36,9 +47,17 @@ const createPaymentIntent = async (userId, packageId, currency = 'usd') => {
     }
 
     const pkg = packageResult.rows[0];
-    const amount = currency === 'usd' ? pkg.price_usd : pkg.price_vnd / 23000; // Convert VND to USD for Stripe
     const totalCredits = pkg.credits + pkg.bonus_credits;
 
+    let amount = 0;
+    const selectedCurrency = currency?.toLowerCase() === 'vnd' ? 'vnd' : 'usd';
+    if (selectedCurrency === 'usd') {
+      amount = Math.round(pkg.price_usd * 100);
+    } else {
+      // Stripe only supports some currencies for direct payment
+      // We convert VND to USD for Stripe and keep currency metadata as VND
+      amount = Math.round(pkg.price_vnd / 26300 * 100); // Rough conversion
+    }
     // Get or create Stripe customer
     const userResult = await query(
       'SELECT email, username FROM users WHERE user_id = $1',
@@ -74,13 +93,15 @@ const createPaymentIntent = async (userId, packageId, currency = 'usd') => {
 
     // Create Payment Intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Stripe uses cents
-      currency: currency.toLowerCase(),
+      amount,
+      currency: 'usd', // Charge in USD, even for VND purchases
       customer: stripeCustomerId,
       metadata: {
         user_id: userId,
         package_id: packageId,
-        credits: totalCredits.toString()
+        credits: totalCredits.toString(),
+        original_currency: selectedCurrency,
+        original_amount: selectedCurrency === 'usd' ? pkg.price_usd : pkg.price_vnd
       },
       description: `Purchase ${totalCredits} credits for ShareBuddy`
     });
@@ -90,14 +111,14 @@ const createPaymentIntent = async (userId, packageId, currency = 'usd') => {
       `INSERT INTO payment_transactions 
        (user_id, stripe_payment_intent_id, stripe_customer_id, amount, currency, credits_purchased, payment_status)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, paymentIntent.id, stripeCustomerId, amount, currency, totalCredits, 'pending']
+      [userId, paymentIntent.id, stripeCustomerId, amount / 100, selectedCurrency, totalCredits, 'pending']
     );
 
     return {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
-      amount: amount,
-      currency: currency,
+      amount: amount / 100,
+      currency: selectedCurrency,
       credits: totalCredits
     };
   } catch (error) {
@@ -124,9 +145,8 @@ const handleWebhook = async (event) => {
       
       default:
         console.log(`Unhandled event type: ${event.type}`);
+        return { received: true };
     }
-    
-    return { received: true };
   } catch (error) {
     console.error('Webhook handler error:', error);
     throw error;
@@ -195,21 +215,23 @@ const handlePaymentSuccess = async (paymentIntent) => {
 // Handle failed payment
 const handlePaymentFailure = async (paymentIntent) => {
   try {
+
+    const errorMessage = paymentIntent.last_payment_error?.message || 'Payment failed';
     // Update payment transaction
     await query(
       `UPDATE payment_transactions 
        SET payment_status = 'failed', error_message = $2, updated_at = NOW()
        WHERE stripe_payment_intent_id = $1`,
-      [paymentIntent.id, paymentIntent.last_payment_error?.message || 'Payment failed']
+      [paymentIntent.id, errorMessage]
     );
 
     // Get user ID
-    const result = await query(
+    const userResult = await query(
       'SELECT user_id FROM payment_transactions WHERE stripe_payment_intent_id = $1',
       [paymentIntent.id]
     );
 
-    if (result.rows.length > 0) {
+    if (userResult.rows.length > 0) {
       // Create notification
       await query(
         `INSERT INTO notifications (user_id, type, title, message)
@@ -320,6 +342,7 @@ const getPaymentHistory = async (userId, page = 1, limit = 10) => {
       limit
     };
   } catch (error) {
+    console.error('Error fetching payment history:', error);
     throw error;
   }
 };
@@ -343,6 +366,7 @@ const verifyPayment = async (paymentIntentId) => {
       currency: paymentIntent.currency
     };
   } catch (error) {
+    console.error('Error verifying payment:', error);
     throw error;
   }
 };
