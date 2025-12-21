@@ -145,8 +145,8 @@ const handleWebhook = async (event) => {
       
       default:
         console.log(`Unhandled event type: ${event.type}`);
-        return { received: true };
     }
+    return { received: true };
   } catch (error) {
     console.error('Webhook handler error:', error);
     throw error;
@@ -240,7 +240,7 @@ const handlePaymentFailure = async (paymentIntent) => {
         `INSERT INTO notifications (user_id, type, title, message)
          VALUES ($1, $2, $3, $4)`,
         [
-          result.rows[0].user_id,
+          userResult.rows[0].user_id,
           'payment_failed',
           'Payment Failed',
           'Your payment could not be processed. Please try again.'
