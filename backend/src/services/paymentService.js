@@ -365,6 +365,13 @@ const verifyPayment = async (paymentIntentId) => {
   try {
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
+    await query(
+      `UPDATE payment_transactions 
+       SET payment_status = $2, updated_at = NOW()
+       WHERE stripe_payment_intent_id = $1`,
+      [paymentIntentId, paymentIntent.status]
+    );
+
     return {
       status: paymentIntent.status,
       amount: paymentIntent.amount / 100,
