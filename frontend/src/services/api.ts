@@ -41,9 +41,16 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     // Handle authentication errors
     if (error.response?.status === 401) {
-      localStorage.removeItem('sharebuddy_token');
-      localStorage.removeItem('sharebuddy_user');
-      window.location.href = '/login';
+      // Don't redirect if it's a login/register request (user input error)
+      const url = error.config?.url || '';
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+      
+      if (!isAuthEndpoint) {
+        // Token expired or invalid - redirect to login
+        localStorage.removeItem('sharebuddy_token');
+        localStorage.removeItem('sharebuddy_user');
+        window.location.href = '/login';
+      }
     }
     
     // Handle network errors

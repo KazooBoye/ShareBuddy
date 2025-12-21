@@ -32,7 +32,6 @@ import DocumentDetailPage from './pages/documents/DocumentDetailPage';
 import DocumentsPage from './pages/documents/DocumentsPage';
 import UploadPage from './pages/documents/UploadPage';
 import ProfilePage from './pages/user/ProfilePage';
-import AdminPage from './pages/admin/AdminPage';
 import VerifiedAuthorsPage from './pages/VerifiedAuthorsPage';
 import VerifiedAuthorProgressPage from './pages/VerifiedAuthorProgressPage';
 import PurchaseCreditsPage from './pages/PurchaseCreditsPage';
@@ -110,7 +109,6 @@ const AppContent: React.FC = () => {
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/profile/:userId" element={<ProfilePage />} />
                 <Route path="/verified-author-progress" element={<VerifiedAuthorProgressPage />} />
-                <Route path="/admin" element={<AdminPage />} />
                 <Route path="/purchase-credits" element={<PurchaseCreditsPage />} />
                 <Route path="/payment-history" element={<PaymentHistoryPage />} />
               </Route>

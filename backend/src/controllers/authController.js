@@ -185,7 +185,7 @@ const getMe = async (req, res, next) => {
     const result = await query(
       `SELECT user_id, email, username, full_name, bio, university, major, 
               role, credits, is_verified_author, avatar_url, created_at,
-              password_hash, google_id, facebook_id
+              password_hash, google_id, facebook_id, email_verified
        FROM users WHERE user_id = $1`,
       [req.user.user_id]
     );

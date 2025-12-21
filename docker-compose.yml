@@ -61,6 +61,9 @@ services:
     volumes:
       - backend-uploads:/app/uploads
       - upload-temp:/app/uploads/temp
+    depends_on:
+      gotenberg:
+        condition: service_healthy
     networks:
       - sharebuddy-network
     healthcheck:
@@ -128,20 +131,23 @@ services:
       - "3001:3000"
     command:
       - "gotenberg"
-      - "--api-timeout=30s"
-      - "--api-timeout-duration=30s"
+      - "--api-timeout=120s"
+      - "--libreoffice-auto-start=true"
+      - "--libreoffice-restart-after=10"
     networks:
       - sharebuddy-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 30s
       timeout: 10s
       retries: 3
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 1G
+          cpus: '2'
+          memory: 2G
+        reservations:
+          memory: 512M
 
   # Frontend Service
   frontend:

@@ -30,9 +30,16 @@ const LoginPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const result = await login(formData);
-    if (result.type === 'auth/login/fulfilled') {
-      navigate('/dashboard');
+    try {
+      const result = await login(formData);
+      if (result.type === 'auth/login/fulfilled') {
+        navigate('/dashboard');
+      }
+      // If rejected, error will be shown via useAuth error state
+      // Form data is preserved automatically
+    } catch (err) {
+      console.error('Login error:', err);
+      // Error is already handled by Redux, just prevent any page reload
     }
   };
 
