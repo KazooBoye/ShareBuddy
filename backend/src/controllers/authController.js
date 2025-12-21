@@ -55,7 +55,7 @@ const register = async (req, res, next) => {
     const result = await query(
       `INSERT INTO users (email, password_hash, username, full_name, university, major, credits)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING user_id, email, username, full_name, university, major, credits, role, created_at`,
+       RETURNING user_id, email, username, full_name, university, major, credits, role, created_at, email_verified`,
       [email, hashedPassword, username, fullName, university, major, 10] // Start with 10 credits
     );
 
@@ -91,6 +91,7 @@ const register = async (req, res, next) => {
         user: {
           id: user.user_id,
           email: user.email,
+          emailVerified: user.email_verified || false,
           username: user.username,
           fullName: user.full_name,
           university: user.university,
@@ -124,7 +125,7 @@ const login = async (req, res, next) => {
 
     // Find user
     const result = await query(
-      `SELECT user_id, email, username, full_name, password_hash, role, credits, is_active, avatar_url
+      `SELECT user_id, email, username, full_name, password_hash, role, credits, is_active, avatar_url, email_verified
        FROM users WHERE email = $1`,
       [email]
     );
@@ -165,6 +166,7 @@ const login = async (req, res, next) => {
         user: {
           id: user.user_id,
           email: user.email,
+          emailVerified: user.email_verified || false,
           username: user.username,
           fullName: user.full_name,
           role: user.role,
@@ -209,6 +211,7 @@ const getMe = async (req, res, next) => {
       data: {
         id: user.user_id,
         email: user.email,
+        emailVerified: user.email_verified || false,
         username: user.username,
         fullName: user.full_name,
         bio: user.bio,
