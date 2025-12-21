@@ -1,7 +1,7 @@
 # Backend Dockerfile for ShareBuddy
 FROM node:18-alpine
 
-# Install system dependencies for canvas and PDF processing
+# Install system dependencies for canvas, PDF processing, and ImageMagick
 RUN apk add --no-cache \
     build-base \
     cairo-dev \
@@ -9,7 +9,9 @@ RUN apk add --no-cache \
     pango-dev \
     giflib-dev \
     pixman-dev \
-    python3
+    python3 \
+    imagemagick \
+    ghostscript
 
 # Set working directory
 WORKDIR /app

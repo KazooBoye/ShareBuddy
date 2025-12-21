@@ -1,18 +1,18 @@
 /**
  * Preview Controller - Generate and serve document previews
- * IMAGEMAGICK VERSION - Simplified thumbnail generation
  */
 
 const { PDFDocument } = require('pdf-lib');
+const { createCanvas, Image } = require('canvas');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const { query } = require('../config/database');
 const axios = require('axios');
 const FormData = require('form-data');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execAsync = promisify(exec);
+
+// PDF.js setup for Node environment
+const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
 
 const PREVIEW_PAGE_LIMIT = 10;
 const THUMBNAIL_WIDTH = 600;
@@ -148,12 +148,11 @@ const generatePreviewInternal = async (documentId) => {
   }
 };
 
-// --- INTERNAL: Generate Thumbnail using ImageMagick ---
+// --- INTERNAL: Generate Thumbnail (Page 1 -> PNG) ---
 const generateThumbnailInternal = async (documentId) => {
   const logPrefix = `[Thumbnail-${documentId}]`;
-  
   try {
-    console.log(`${logPrefix} 🎬 Starting thumbnail generation with ImageMagick...`);
+    console.log(`${logPrefix} 🎬 Starting thumbnail generation...`);
     
     const docResult = await query('SELECT * FROM documents WHERE document_id = $1', [documentId]);
     if (docResult.rows.length === 0) {
@@ -170,53 +169,75 @@ const generateThumbnailInternal = async (documentId) => {
     }
     console.log(`${logPrefix} ✅ PDF bytes extracted (${pdfRes.buffer.length} bytes)`);
 
-    // Write PDF to temp file for ImageMagick
-    const tempDir = path.join(process.cwd(), 'uploads', 'temp');
-    await fs.mkdir(tempDir, { recursive: true });
-    const tempPdfPath = path.join(tempDir, `temp_${documentId}.pdf`);
-    await fs.writeFile(tempPdfPath, pdfRes.buffer);
-    console.log(`${logPrefix} 💾 Temp PDF written: ${tempPdfPath}`);
+    const uint8Array = new Uint8Array(pdfRes.buffer);
+    console.log(`${logPrefix} � Loading PDF with pdfjs-dist...`);
+    const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+    const pdfDocument = await loadingTask.promise;
+    console.log(`${logPrefix} ✅ PDF loaded, pages: ${pdfDocument.numPages}`);
+    
+    console.log(`${logPrefix} 🎨 Rendering page 1...`);
+    const page = await pdfDocument.getPage(1);
+    const viewport = page.getViewport({ scale: 1.0 });
+    console.log(`${logPrefix} 📐 Original viewport: ${viewport.width}x${viewport.height}`);
+    
+    const scale = THUMBNAIL_WIDTH / viewport.width;
+    const scaledViewport = page.getViewport({ scale });
+    console.log(`${logPrefix} 📐 Scaled viewport: ${scaledViewport.width}x${scaledViewport.height}, scale: ${scale}`);
 
+    const canvas = createCanvas(scaledViewport.width, scaledViewport.height);
+    const context = canvas.getContext('2d');
+    console.log(`${logPrefix} 🖼️ Canvas created`);
+
+    // Create render context with proper image/canvas support
+    const renderContext = {
+      canvasContext: context,
+      viewport: scaledViewport,
+      canvasFactory: new NodeCanvasFactory(),
+      // CRITICAL: Provide Image class to pdfjs-dist
+      imageLayer: null,
+      background: 'white'
+    };
+
+    await page.render(renderContext).promise;
+    console.log(`${logPrefix} ✅ Page rendered to canvas`);
+
+    const buffer = canvas.toBuffer('image/png');
+    console.log(`${logPrefix} ✅ PNG buffer created (${buffer.length} bytes)`);
+    
     const thumbDir = path.join(process.cwd(), 'uploads', 'thumbnails');
+    console.log(`${logPrefix} 📁 Thumbnail directory: ${thumbDir}`);
+    
     await fs.mkdir(thumbDir, { recursive: true });
+    console.log(`${logPrefix} ✅ Directory ensured`);
     
     const thumbName = `thumb_${documentId}.png`;
     const thumbPath = path.join(thumbDir, thumbName);
-    console.log(`${logPrefix} 🖼️ Generating thumbnail with ImageMagick...`);
-
-    // Use ImageMagick to generate thumbnail
-    const command = `convert -density 150 "${tempPdfPath}[0]" -resize ${THUMBNAIL_WIDTH}x -quality 90 "${thumbPath}"`;
+    console.log(`${logPrefix} 💾 Writing to: ${thumbPath}`);
     
-    console.log(`${logPrefix} 🔧 Running: ${command}`);
-    const { stdout, stderr } = await execAsync(command);
+    // Write file with sync to ensure it's flushed to disk
+    await fs.writeFile(thumbPath, buffer);
     
-    if (stderr && !stderr.includes('deprecated')) {
-      console.log(`${logPrefix} ⚠️ ImageMagick warnings: ${stderr}`);
-    }
+    // Force sync to disk (important for Docker volumes)
+    const fileHandle = await fs.open(thumbPath, 'r+');
+    await fileHandle.sync(); // fsync to ensure data is written to disk
+    await fileHandle.close();
     
-    console.log(`${logPrefix} ✅ ImageMagick conversion complete`);
-
-    // Clean up temp file
-    try {
-      await fs.unlink(tempPdfPath);
-      console.log(`${logPrefix} 🗑️ Temp file cleaned up`);
-    } catch (cleanupError) {
-      console.warn(`${logPrefix} ⚠️ Failed to clean temp file: ${cleanupError.message}`);
-    }
-
-    // Verify output file
+    console.log(`${logPrefix} ✅ File written and synced to disk`);
+    
+    // Verify file was written with a small delay for Docker volume sync
     await new Promise(resolve => setTimeout(resolve, 100));
     
     try {
       const stats = await fs.stat(thumbPath);
-      console.log(`${logPrefix} ✅ Thumbnail verified on disk: ${stats.size} bytes`);
+      console.log(`${logPrefix} ✅ File verified on disk: ${stats.size} bytes`);
       
-      if (stats.size === 0) {
-        throw new Error('Generated thumbnail file is empty');
+      if (stats.size !== buffer.length) {
+        console.warn(`${logPrefix} ⚠️ File size mismatch! Expected: ${buffer.length}, Got: ${stats.size}`);
+        throw new Error(`File size mismatch: expected ${buffer.length}, got ${stats.size}`);
       }
     } catch (statError) {
-      console.error(`${logPrefix} ❌ Thumbnail verification failed:`, statError.message);
-      throw new Error(`Thumbnail verification failed: ${statError.message}`);
+      console.error(`${logPrefix} ⚠️ File verification failed:`, statError.message);
+      throw new Error(`File verification failed: ${statError.message}`);
     }
 
     const dbThumbUrl = `/uploads/thumbnails/${thumbName}`;
@@ -240,12 +261,57 @@ const generateThumbnailInternal = async (documentId) => {
   }
 };
 
-// Export the new functions (rest of the exports remain the same as original)
-module.exports = {
-  generatePreviewInternal,
-  generateThumbnailInternal,
-  // ... other exports from original file
+// --- Node Canvas Factory for PDF.js with Image support ---
+class NodeCanvasFactory {
+  create(width, height) {
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext("2d");
+    return { canvas, context };
+  }
+  
+  reset(canvasAndContext, width, height) {
+    canvasAndContext.canvas.width = width;
+    canvasAndContext.canvas.height = height;
+  }
+  
+  destroy(canvasAndContext) {
+    canvasAndContext.canvas.width = 0;
+    canvasAndContext.canvas.height = 0;
+    canvasAndContext.canvas = null;
+    canvasAndContext.context = null;
+  }
+}
+
+// CRITICAL FIX: Patch canvas context to properly handle image drawing
+const { CanvasRenderingContext2D } = require('canvas');
+const originalDrawImage = CanvasRenderingContext2D.prototype.drawImage;
+
+CanvasRenderingContext2D.prototype.drawImage = function(image, ...args) {
+  // Ensure image is a valid canvas Image or Canvas
+  if (image && typeof image === 'object') {
+    // Check if it's already a canvas Image or Canvas - if so, use it directly
+    if (image.constructor.name === 'Image' || image.constructor.name === 'Canvas') {
+      return originalDrawImage.call(this, image, ...args);
+    }
+    // If it has a canvas property (from pdfjs), extract it
+    if (image.canvas) {
+      return originalDrawImage.call(this, image.canvas, ...args);
+    }
+  }
+  // Fallback to original
+  return originalDrawImage.call(this, image, ...args);
 };
+
+// Set canvas's Image class globally
+if (typeof global.Image === 'undefined') {
+  global.Image = Image;
+}
+
+// Set Canvas globally
+if (typeof global.Canvas === 'undefined') {
+  const dummyCanvas = createCanvas(0, 0);
+  global.Canvas = dummyCanvas.constructor;
+}
 
 // FIX: Added proper response
 const generatePreview = async (req, res, next) => {
@@ -431,7 +497,7 @@ const getPreviewInfo = async (req, res, next) => {
   }
 };
 
-// Batch generate previews
+// FIX: Added leading slash to preview_url
 const batchGeneratePreviews = async (req, res, next) => {
   try {
     const { documentIds } = req.body;
@@ -462,6 +528,7 @@ const batchGeneratePreviews = async (req, res, next) => {
 
         const document = docResult.rows[0];
         
+        // Use getRawPdfBytes helper
         const pdfRes = await getRawPdfBytes(document);
         if (!pdfRes.success) {
           results.failed.push({ documentId, reason: pdfRes.error });
@@ -488,6 +555,7 @@ const batchGeneratePreviews = async (req, res, next) => {
         
         await fs.writeFile(previewPath, previewBytes);
 
+        // FIX: Added leading slash
         await query(
           'UPDATE documents SET preview_url = $1, preview_pages = $2 WHERE document_id = $3',
           [`/uploads/previews/${previewFileName}`, previewPages, documentId]
