@@ -2,6 +2,28 @@
 
 All notable changes to ShareBuddy project will be documented in this file.
 
+## [1.6.7] - 2025-12-22
+
+### 🔍 Document Search Fix
+
+### Fixed Search Results Quality
+- **Issue**: Document search in DocumentList was returning irrelevant results or no results despite documents existing
+- **Root Cause**: SQL query parameter mismatch in searchService.js - paramCount was incremented only once per word but 3 parameters were pushed (for title, description, subject)
+  - Example: Search "machine learning" would create `$1 OR $1 OR $1 OR $2 OR $2 OR $2` instead of `$1 OR $2 OR $3 OR $4 OR $5 OR $6`
+  - This caused incorrect query binding and wrong results
+
+### Changes Made
+- **searchService.js**: Fixed word splitting search logic
+  - Changed from pushing parameters after building conditions to pushing them during condition building
+  - Each word parameter now has unique paramCount ($1, $2, $3 for title/description/subject)
+  - Properly increments paramCount for each field searched
+
+### Impact
+- ✅ Search now returns accurate and relevant results
+- ✅ Multi-word search queries work correctly
+- ✅ Filters applied to search results function properly
+- ✅ Search quality equivalent to BookmarkedDocumentsPage (which was already working)
+
 ## [1.6.6] - 2025-12-22
 
 ### 🔧 Email Verification Fix

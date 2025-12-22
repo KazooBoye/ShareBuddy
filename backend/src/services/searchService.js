@@ -19,30 +19,29 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
     
     let processedQuery = '';
     let useILike = false;
-    let usePrefixMatch = false;
     
     if (isShortQuery) {
       // For short queries (< 3 chars), use ILIKE for partial matching
       useILike = true;
       processedQuery = trimmedQuery;
     } else {
-      // For longer queries, use full-text search with tsquery
-      // Check if it's a single word (no spaces) - use prefix matching for partial word matches
+      // For longer queries, split into words and prepare for search
       const words = trimmedQuery.split(/\s+/).filter(w => w.length > 0);
       
-      if (words.length === 1) {
-        // Single word query - use prefix matching (:* operator) to match partial words
-        // Example: "lap" will match "laptop", "laptrinhmang", etc.
-        usePrefixMatch = true;
-        const cleanWord = words[0].replace(/[^\w]/g, '');
-        processedQuery = cleanWord + ':*'; // Prefix match operator
-      } else {
-        // Multiple words - use standard tsquery with OR operator
-        processedQuery = words
-          .map(term => term.replace(/[^\w\s]/g, ''))
-          .filter(term => term.length > 0)
-          .join(' | '); // OR operator for better results
+      // Clean each word of special characters and prepare for ILIKE search
+      const cleanedWords = words
+        .map(term => term.replace(/[^\w\u0080-\uFFFF]/g, '')) // Keep unicode for Vietnamese
+        .filter(term => term.length > 0);
+      
+      if (cleanedWords.length === 0) {
+        return {
+          documents: [],
+          pagination: { page: 1, totalPages: 1, total: 0 }
+        };
       }
+      
+      // Store cleaned words for use in query building
+      processedQuery = cleanedWords.join('|'); // For later splitting
     }
 
     // Build base query based on search type
@@ -74,7 +73,7 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
         WHERE d.status = 'approved'
       `;
       
-      // Add ILIKE search condition
+      // Add ILIKE search condition for short query
       if (processedQuery && processedQuery.length > 0) {
         conditions.push(`(
           d.title ILIKE $${++paramCount} OR 
@@ -85,61 +84,52 @@ const searchDocuments = async (searchQuery, filters = {}, page = 1, limit = 20) 
         queryParams.push(likePattern, likePattern, likePattern);
       }
     } else {
-      // Use full-text search for longer queries
+      // Use ILIKE search for longer queries (instead of search_vector)
+      sqlQuery = `
+        SELECT 
+          d.document_id,
+          d.title,
+          d.description,
+          d.university,
+          d.subject,
+          d.file_type,
+          d.credit_cost,
+          d.download_count,
+          d.view_count,
+          d.average_rating,
+          d.rating_count,
+          d.thumbnail_url,
+          d.created_at,
+          u.user_id,
+          u.username,
+          u.full_name,
+          u.is_verified_author,
+          1.0 as relevance
+        FROM documents d
+        JOIN users u ON d.author_id = u.user_id
+        WHERE d.status = 'approved'
+      `;
+      
+      // Split processed query and build search conditions
       if (processedQuery && processedQuery.length > 0) {
-        queryParams.push(processedQuery);
-        sqlQuery = `
-          SELECT 
-            d.document_id,
-            d.title,
-            d.description,
-            d.university,
-            d.subject,
-            d.file_type,
-            d.credit_cost,
-            d.download_count,
-            d.view_count,
-            d.average_rating,
-            d.rating_count,
-            d.thumbnail_url,
-            d.created_at,
-            u.user_id,
-            u.username,
-            u.full_name,
-            u.is_verified_author,
-            ts_rank(d.search_vector, query) as relevance
-          FROM documents d
-          JOIN users u ON d.author_id = u.user_id,
-          to_tsquery('simple', $${++paramCount}) query
-          WHERE d.status = 'approved'
-        `;
-        conditions.push(`d.search_vector @@ query`);
-      } else {
-        // No search query, just list all
-        sqlQuery = `
-          SELECT 
-            d.document_id,
-            d.title,
-            d.description,
-            d.university,
-            d.subject,
-            d.file_type,
-            d.credit_cost,
-            d.download_count,
-            d.view_count,
-            d.average_rating,
-            d.rating_count,
-            d.thumbnail_url,
-            d.created_at,
-            u.user_id,
-            u.username,
-            u.full_name,
-            u.is_verified_author,
-            1.0 as relevance
-          FROM documents d
-          JOIN users u ON d.author_id = u.user_id
-          WHERE d.status = 'approved'
-        `;
+        // Split by | which was our separator from earlier
+        const words = processedQuery.split('|').filter(w => w.length > 0);
+        
+        if (words.length > 0) {
+          const searchConditions = words.map((word) => {
+            const titleParam = ++paramCount;
+            const descParam = ++paramCount;
+            const subjParam = ++paramCount;
+            const pattern = `%${word}%`;
+            queryParams.push(pattern, pattern, pattern);
+            return `(d.title ILIKE $${titleParam} OR d.description ILIKE $${descParam} OR d.subject ILIKE $${subjParam})`;
+          });
+          
+          // Combine search conditions with OR
+          if (searchConditions.length > 0) {
+            conditions.push(`(${searchConditions.join(' OR ')})`);
+          }
+        }
       }
     }
 
