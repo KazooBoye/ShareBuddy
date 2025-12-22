@@ -163,7 +163,7 @@ const handlePaymentSuccess = async (paymentIntent) => {
     return await withTransaction(async (client) => {
       // Update payment transaction
       const checkResult = await client.query(
-        `SELECT payment_status, user_id, credits_purchased 
+        `SELECT payment_id, payment_status, user_id, credits_purchased 
          FROM payment_transactions 
          WHERE stripe_payment_intent_id = $1
          FOR UPDATE`,
