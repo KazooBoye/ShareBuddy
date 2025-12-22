@@ -174,6 +174,58 @@ const MyFeedPage: React.FC = () => {
         </Col>
       </Row>
 
+            {/* Section 4: Hot Q&A */}
+      <Row className="mb-5">
+        <Col xs={12}>
+            <h4 className="mb-3">
+            <span style={{ verticalAlign: 'middle', marginRight: 8 }}>
+              <i className="bi bi-chat-dots-fill text-info" style={{ fontSize: '1.3rem' }}></i>
+            </span>
+            Chủ đề Q&A nóng
+            </h4>
+          {loading.hotqa ? (
+            <div className="text-center py-5">
+              <Spinner animation="border" variant="primary" />
+            </div>
+          ) : errors.hotqa ? (
+            <Alert variant="danger">{errors.hotqa}</Alert>
+          ) : hotQA.length === 0 ? (
+            <Alert variant="info">Chưa có thảo luận nào trong ngày hôm nay.</Alert>
+          ) : (
+            <Row className="g-3">
+              {hotQA.slice(0, 5).map((qa) => (
+                <Col xs={12} key={qa.question_id}>
+                  <Card 
+                    className="card-hover" 
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setSelectedQuestionId(qa.question_id);
+                      setShowQuestionModal(true);
+                    }}
+                  >
+                    <Card.Body>
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div className="flex-grow-1">
+                          <Card.Title style={{ fontSize: '1rem' }}>{qa.title}</Card.Title>
+                          <Card.Text className="text-muted small mb-0">
+                            <i className="bi bi-person me-1"></i> {qa.author_name} {qa.is_verified_author && <VerifiedBadge />}
+                            <span className="mx-2">•</span>
+                            <i className="bi bi-chat-dots me-1"></i> {qa.reply_count} câu trả lời
+                          </Card.Text>
+                        </div>
+                        <div className="badge bg-success" style={{ fontSize: '0.85rem' }}>
+                          HOT
+                        </div>
+                      </div>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          )}
+        </Col>
+      </Row>
+
       {/* Section 2: Trending Documents */}
       <Row className="mb-5">
         <Col xs={12}>
@@ -256,58 +308,6 @@ const MyFeedPage: React.FC = () => {
                         </Card.Text>
                     </Card.Body>
                 </Card>
-                </Col>
-              ))}
-            </Row>
-          )}
-        </Col>
-      </Row>
-
-      {/* Section 4: Hot Q&A */}
-      <Row className="mb-5">
-        <Col xs={12}>
-            <h4 className="mb-3">
-            <span style={{ verticalAlign: 'middle', marginRight: 8 }}>
-              <i className="bi bi-chat-dots-fill text-info" style={{ fontSize: '1.3rem' }}></i>
-            </span>
-            Chủ đề Q&A nóng
-            </h4>
-          {loading.hotqa ? (
-            <div className="text-center py-5">
-              <Spinner animation="border" variant="primary" />
-            </div>
-          ) : errors.hotqa ? (
-            <Alert variant="danger">{errors.hotqa}</Alert>
-          ) : hotQA.length === 0 ? (
-            <Alert variant="info">Chưa có thảo luận nào trong ngày hôm nay.</Alert>
-          ) : (
-            <Row className="g-3">
-              {hotQA.slice(0, 5).map((qa) => (
-                <Col xs={12} key={qa.question_id}>
-                  <Card 
-                    className="card-hover" 
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => {
-                      setSelectedQuestionId(qa.question_id);
-                      setShowQuestionModal(true);
-                    }}
-                  >
-                    <Card.Body>
-                      <div className="d-flex justify-content-between align-items-start">
-                        <div className="flex-grow-1">
-                          <Card.Title style={{ fontSize: '1rem' }}>{qa.title}</Card.Title>
-                          <Card.Text className="text-muted small mb-0">
-                            <i className="bi bi-person me-1"></i> {qa.author_name} {qa.is_verified_author && <VerifiedBadge />}
-                            <span className="mx-2">•</span>
-                            <i className="bi bi-chat-dots me-1"></i> {qa.reply_count} câu trả lời
-                          </Card.Text>
-                        </div>
-                        <div className="badge bg-success" style={{ fontSize: '0.85rem' }}>
-                          HOT
-                        </div>
-                      </div>
-                    </Card.Body>
-                  </Card>
                 </Col>
               ))}
             </Row>
