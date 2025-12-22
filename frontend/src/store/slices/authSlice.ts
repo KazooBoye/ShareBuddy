@@ -75,9 +75,12 @@ export const getCurrentUser = createAsyncThunk(
       const lastFetch = state.auth.lastUserFetch;
       const now = Date.now();
       
-      if (lastFetch && (now - lastFetch) < 5000) {
-        console.log('⚡ Skipping redundant user fetch (last fetch was', Math.round((now - lastFetch) / 1000), 'seconds ago)');
-        return state.auth.user; // Return cached user
+      if (
+        lastFetch &&
+        (now - lastFetch) < 5000 &&
+        state.auth.user
+      ) {
+        return state.auth.user;
       }
       
       console.log('🔄 Fetching user data from server...');
@@ -146,6 +149,12 @@ const authSlice = createSlice({
       state.user = tokenService.getUser();
       state.token = tokenService.getToken();
       state.isAuthenticated = tokenService.isAuthenticated();
+    },
+    updateCredits: (state, action: PayloadAction<number>) => {
+    if (state.user) {
+      state.user.credits = action.payload;
+      tokenService.setUser(state.user); // sync localStorage
+      }
     },
   },
   extraReducers: (builder) => {
@@ -247,5 +256,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setLoading, initializeAuth } = authSlice.actions;
+export const { clearError, setLoading, initializeAuth, updateCredits } = authSlice.actions;
 export default authSlice.reducer;

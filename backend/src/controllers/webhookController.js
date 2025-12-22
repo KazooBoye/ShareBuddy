@@ -177,7 +177,7 @@ const receiveModerationResult = async (req, res, next) => {
           } catch (notifError) {
             console.error(`⚠️ Failed to create rejection notification:`, notifError.message);
           }
-
+        }
       } else if (moderation_status === 'failed') {
         // Update job as failed
         await client.query(
