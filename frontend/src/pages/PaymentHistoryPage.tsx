@@ -39,7 +39,7 @@ const PaymentHistoryPage: React.FC = () => {
     fetchHistory();
   }, [isAuthenticated, currentPage]);
 
-  const fetchHistory = async () => {
+   const fetchHistory = async () => {
     try {
       setLoading(true);
       setError('');
@@ -48,8 +48,21 @@ const PaymentHistoryPage: React.FC = () => {
         params: { page: currentPage, limit: 10 }
       });
 
-      if (response.data?.success && Array.isArray(response.data.data)) {
-        setTransactions(response.data.data);
+      // LOG để debug nếu cần
+      console.log('API Response:', response.data);
+
+      // SỬA: Kiểm tra cấu trúc đúng (response.data.data.transactions)
+      if (response.data?.success && response.data?.data) {
+        
+        // 1. Lấy mảng transactions (backend trả về trong key .transactions)
+        const txList = response.data.data.transactions || []; 
+        setTransactions(txList);
+
+        // 2. Tính toán tổng số trang (backend trả về .total)
+        const totalItems = response.data.data.total || 0;
+        const limit = 10;
+        setTotalPages(Math.ceil(totalItems / limit) || 1);
+
       } else {
         setTransactions([]);
       }
@@ -92,6 +105,9 @@ const PaymentHistoryPage: React.FC = () => {
     }
     return `${amount.toLocaleString('vi-VN')} VND`;
   };
+
+  console.log('Current Transactions State:', transactions);
+  console.log('Loading:', loading, 'Error:', error);
 
   if (loading) {
     return (
