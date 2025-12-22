@@ -59,6 +59,8 @@ router.post('/logout', authController.logout);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/forgot-password', authLimiter, authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
+// Support both query param (?token=...) and path param (/:token)
+router.get('/verify-email', authController.verifyEmail);
 router.get('/verify-email/:token', authController.verifyEmail);
 router.post('/resend-verification', authLimiter, authController.resendVerification);
 

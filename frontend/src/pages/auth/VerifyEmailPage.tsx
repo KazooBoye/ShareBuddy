@@ -25,7 +25,7 @@ const VerifyEmailPage: React.FC = () => {
 
       try {
         const response = await axios.get(
-          `${process.env.REACT_APP_API_URL}/api/auth/verify-email/${token}`
+          `${process.env.REACT_APP_API_URL}/api/auth/verify-email?token=${token}`
         );
 
         if (response.data.success) {

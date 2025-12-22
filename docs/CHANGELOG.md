@@ -2,6 +2,34 @@
 
 All notable changes to ShareBuddy project will be documented in this file.
 
+## [1.6.6] - 2025-12-22
+
+### 🔧 Email Verification Fix
+
+### Fixed Email Verification Flow
+- **Issue**: Users registering received verification email but clicking link resulted in "Token không được cung cấp" error
+- **Root Cause**: Mismatch between how email link was sent (query param) vs how VerifyEmailPage was calling API (path param)
+  - emailService sent: `/verify-email?token=...` (query param)
+  - VerifyEmailPage called: `/api/auth/verify-email/${token}` (path param)
+  - authController expected: `req.query.token` (query param)
+
+### Changes Made
+- **VerifyEmailPage.tsx**: Updated to send token as query parameter instead of path parameter
+  - Changed from: `/api/auth/verify-email/${token}`
+  - Changed to: `/api/auth/verify-email?token=${token}`
+- **authRoutes.js**: Added support for both query and path parameter formats
+  - Added route: `GET /api/auth/verify-email` (for query param)
+  - Kept route: `GET /api/auth/verify-email/:token` (for backward compatibility)
+- **authController.js**: Updated verifyEmail to accept token from both sources
+  - Now reads: `const token = req.query.token || req.params.token`
+  - Improved error message: "Xác thực thất bại. Token không được cung cấp"
+
+### Impact
+- ✅ Email verification flow now works correctly
+- ✅ Users can successfully verify their email after registration
+- ✅ Backward compatibility maintained for path-based tokens
+- ✅ No breaking changes to existing APIs
+
 ## [1.6.5] - 2025-12-21
 
 ### 🔔 Notification System Implementation

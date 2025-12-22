@@ -348,12 +348,13 @@ const resetPassword = async (req, res, next) => {
 
 const verifyEmail = async (req, res, next) => {
   try {
-    const { token } = req.query;
+    // Support both query param (?token=...) and path param (/:token)
+    const token = req.query.token || req.params.token;
 
     if (!token) {
       return res.status(400).json({
         success: false,
-        error: 'Token không được cung cấp'
+        error: 'Xác thực thất bại. Token không được cung cấp'
       });
     }
 
