@@ -161,7 +161,8 @@ const handlePaymentSuccess = async (paymentIntent) => {
       const checkResult = await client.query(
         `SELECT payment_status, user_id, credits_purchased 
          FROM payment_transactions 
-         WHERE stripe_payment_intent_id = $1`,
+         WHERE stripe_payment_intent_id = $1
+         FOR UPDATE`,
         [paymentIntent.id]
       );
 
@@ -363,14 +364,6 @@ const getPaymentHistory = async (userId, page = 1, limit = 10) => {
 const verifyPayment = async (paymentIntentId) => {
   try {
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    
-    // Update local database
-    await query(
-      `UPDATE payment_transactions 
-       SET payment_status = $2, updated_at = NOW()
-       WHERE stripe_payment_intent_id = $1`,
-      [paymentIntentId, paymentIntent.status]
-    );
 
     return {
       status: paymentIntent.status,
