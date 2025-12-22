@@ -61,6 +61,7 @@ export const documentService = {
             items: response.data.documents.map((doc: any) => ({
               ...doc,
               id: doc.document_id,
+              thumbnailUrl: doc.thumbnail_url || doc.thumbnailUrl,
               author: {
                 id: doc.user_id,
                 username: doc.author_username || doc.username,
